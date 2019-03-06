@@ -2,6 +2,10 @@
 import requests
 
 
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+import sys
+
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 
@@ -19,6 +23,20 @@ def fetch_url(url):
 def parse_content(future):
     response = future.result()
     print(response)
+
+#Needs latest version of Chrome
+def render_page(url):
+    rendered_page=""
+    if sys.platform == "win32":
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        driver = webdriver.Chrome("chromedriver.exe",options=chrome_options)
+        driver.get(url)
+        rendered_page = driver.page_source
+    else:
+        pass
+        #TODO implement the same code for mac
+    return rendered_page
 
 
 class WebCrawler:
