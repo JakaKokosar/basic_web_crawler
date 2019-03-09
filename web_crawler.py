@@ -8,9 +8,10 @@ import multiprocessing
 
 from queue import Empty
 from concurrent.futures import ProcessPoolExecutor, Future, ALL_COMPLETED, wait
-
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+
+from utils import db_connect
 
 
 frontier = multiprocessing.Queue()
@@ -29,6 +30,7 @@ class Worker:
 
     def __init__(self):
         self.driver = None
+        self.db_connection = None
 
     def __get_chrome_driver(self):
         chrome_options = Options()
@@ -55,7 +57,8 @@ class Worker:
         self.parse_page_content()
 
     def parse_page_content(self,):
-        print(self.driver.page_source)
+        pass
+        # print(self.driver.page_source)
 
     def dequeue_url(self):
         # Fetch URLs from Frontier.
@@ -70,7 +73,17 @@ class Worker:
             time.sleep(1)  # simulate a "long" operation
 
     def __call__(self):
+        # connect to PostgreSQL database
+        self.db_connection = db_connect()
+        print(self.db_connection)
+
         self.__get_chrome_driver()
+
+        # TODO: gracefully close connection,
+        #       when process is finished.
+        self.db_connection.close()
+        print(self.db_connection)
+
         return self.dequeue_url()
 
 
