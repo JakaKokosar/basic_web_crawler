@@ -11,6 +11,12 @@ from concurrent.futures import ProcessPoolExecutor, Future, ALL_COMPLETED, wait
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 
+
+import urllib.robotparser
+import urlcanon
+
+from bs4 import BeautifulSoup
+
 from utils import db_connect
 
 
@@ -31,6 +37,7 @@ class Worker:
     def __init__(self):
         self.driver = None
         self.db_connection = None
+        self.robots_parser = urllib.robotparser.RobotFileParser()
 
     def __get_chrome_driver(self):
         chrome_options = Options()
@@ -43,6 +50,11 @@ class Worker:
 
         self.driver = webdriver.Chrome(driver_path, options=chrome_options)
 
+    def set_robots(self, url: str):
+        path = urlcanon.semantic(urlcanon.parse_url(url))
+        self.robots_parser.set_url(path + "robots.txt")
+        self.robots_parser.read()
+
     def fetch_url(self, url: str):
 
         # TODO: here we must check status codes
@@ -53,10 +65,22 @@ class Worker:
         # then render it with selenium? Would prefer to use
         # requests module for retrieving page content.
 
-        self.driver.get(url)
-        self.parse_page_content()
+        if self.robots_parser.can_fetch("*", url):
+            self.driver.get(url)
+            self.parse_page_content()
+        else:
+            pass
 
     def parse_page_content(self,):
+        # TODO save everything somewhere
+        soup = BeautifulSoup(self.driver.page_source, 'html.parser')
+        hrefs = [a.get("href") for a in soup.find_all('a', href=True)]
+        images = [a.get for a in soup.find_all('img')]
+        # TODO Implement JS onclick in beautiful soup
+        # TODO Filter bad hrefs and images
+        # TODO how to handle JS - depends on wether we want to always run Selenium or not
+        # scripts = [a for a in soup.find_all('script')]
+        # pprint(scripts)
         pass
         # print(self.driver.page_source)
 
@@ -69,6 +93,7 @@ class Worker:
                 return 'Process {} stopped. No new URLs in Frontier\n'.format(os.getpid())
 
             # print(os.getpid(), "got", url, 'is empty:', frontier.empty())
+            self.set_robots(url)
             self.fetch_url(url)
             time.sleep(1)  # simulate a "long" operation
 
