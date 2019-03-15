@@ -21,7 +21,8 @@ from utils import db_connect
 
 
 frontier = multiprocessing.Queue()
-
+manager = multiprocessing.Manager()
+shared_dict = manager.dict()
 
 class Worker:
     """ Base class for web crawler.
@@ -51,6 +52,7 @@ class Worker:
         self.driver = webdriver.Chrome(driver_path, options=chrome_options)
 
     def set_robots(self, url: str):
+        # TODO: Add sites on sitemap in frontier
         path = urlcanon.semantic(urlcanon.parse_url(url))
         self.robots_parser.set_url(path + "robots.txt")
         self.robots_parser.read()
@@ -65,7 +67,11 @@ class Worker:
         # then render it with selenium? Would prefer to use
         # requests module for retrieving page content.
 
-        if self.robots_parser.can_fetch("*", url):
+        if url not in shared_dict.keys() and self.robots_parser.can_fetch("*", url):
+            # TODO More advanced already visited detection, ex. reverse hash functions
+            shared_dict[url] = 1
+            if self.robots_parser.crawl_delay("*") is not None:
+                time.sleep(int(self.robots_parser.crawl_delay("*")))
             self.driver.get(url)
             self.parse_page_content()
         else:
