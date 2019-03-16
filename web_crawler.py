@@ -15,6 +15,7 @@ from selenium.webdriver.chrome.options import Options
 
 import urllib.robotparser
 import urlcanon
+import validators
 
 from bs4 import BeautifulSoup
 
@@ -28,10 +29,9 @@ shared_dict = manager.dict()
 class Worker:
     """ Base class for web crawler.
 
-    TODO: - HTTP downloader and renderer: To retrieve and render a web page. (Downloader is done, need renderer)
-          - Data extractor: Minimal functionalities to extract images and hyperlinks.
-          - Duplicate detector: To detect already parsed pages.
-          - URL frontier: A list of URLs waiting to be parsed. ------> Done, implemented as FIFO queue
+    TODO: - HTTP downloader and renderer: To retrieve and render a web page.
+          - Data extractor: Links extracting done 70% done. Need images.
+          - Duplicate detector: Basic done. Need advanced based on content.
           - Datastore: To store the data and additional metadata used by the crawler.
 
     """
@@ -80,23 +80,34 @@ class Worker:
         # then render it with selenium? Would prefer to use
         # requests module for retrieving page content.
 
-        if url not in shared_dict.keys() and self.robots_parser.can_fetch("*", url):
-            # TODO More advanced already visited detection, ex. reverse hash functions
-            shared_dict[url] = 1
-            if self.robots_parser.crawl_delay("*") is not None:
-                time.sleep(int(self.robots_parser.crawl_delay("*")))
-            self.driver.get(url)
-            self.parse_page_content()
-        else:
+        # TODO Try catch and error detection here
+
+        try:
+            self.parse_robots(url)
+
+            if url not in shared_dict.keys() and self.robots_parser.can_fetch("*", url):
+                # TODO More advanced already visited detection, ex. reverse hash functions
+                shared_dict[url] = 1
+                if self.robots_parser.crawl_delay("*") is not None:
+                    time.sleep(int(self.robots_parser.crawl_delay("*")))
+                self.driver.get(url)
+                self.parse_page_content()
+            else:
+                pass
+        except Exception as ex:
+            print(ex)
             pass
 
     def parse_page_content(self,):
-        # TODO save everything somewhere
+
+        # Parse all links and put them in the frontier
         soup = BeautifulSoup(self.driver.page_source, 'html.parser')
-        hrefs = [a.get("href") for a in soup.find_all('a', href=True)]
+        hrefs = [a.get("href") for a in soup.find_all('a', href=True) if validators.url(a.get("href"))]
+        [frontier.put(href) for href in hrefs if href not in shared_dict.keys()]
+
         images = [a.get for a in soup.find_all('img')]
         # TODO Implement JS onclick in beautiful soup
-        # TODO Filter bad hrefs and images
+        # TODO Filter bad images
         # TODO how to handle JS - depends on wether we want to always run Selenium or not
         # scripts = [a for a in soup.find_all('script')]
         # pprint(scripts)
@@ -112,7 +123,6 @@ class Worker:
                 return 'Process {} stopped. No new URLs in Frontier\n'.format(os.getpid())
 
             # print(os.getpid(), "got", url, 'is empty:', frontier.empty())
-            self.parse_robots(url)
             self.fetch_url(url)
             time.sleep(1)  # simulate a "long" operation
 
