@@ -4,6 +4,7 @@ import sys
 import os
 import time
 import requests
+import urllib.request
 import multiprocessing
 
 from queue import Empty
@@ -51,11 +52,23 @@ class Worker:
 
         self.driver = webdriver.Chrome(driver_path, options=chrome_options)
 
-    def set_robots(self, url: str):
-        # TODO: Add sites on sitemap in frontier
-        path = urlcanon.semantic(urlcanon.parse_url(url))
-        self.robots_parser.set_url(path + "robots.txt")
+    def parse_robots(self, url: str):
+        # Standard robot parser
+        path = urlcanon.semantic(urlcanon.parse_url(url)) + "robots.txt"
+        self.robots_parser.set_url(path)
         self.robots_parser.read()
+
+        # Sitemap parsing
+        contents = urllib.request.urlopen(path).read().decode("utf-8")
+        sitemaps = [line for line in contents.split("\n") if "Sitemap" in line]
+        links = [link.split(" ")[1] for link in sitemaps]
+
+        for link in links:
+            contents = urllib.request.urlopen(link).read()
+            soup = BeautifulSoup(contents, 'html.parser')
+            for loc in soup.find_all("loc"):
+                if loc.contents not in shared_dict.keys():
+                    frontier.put(loc.contents)
 
     def fetch_url(self, url: str):
 
@@ -99,7 +112,7 @@ class Worker:
                 return 'Process {} stopped. No new URLs in Frontier\n'.format(os.getpid())
 
             # print(os.getpid(), "got", url, 'is empty:', frontier.empty())
-            self.set_robots(url)
+            self.parse_robots(url)
             self.fetch_url(url)
             time.sleep(1)  # simulate a "long" operation
 
