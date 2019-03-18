@@ -25,7 +25,8 @@ from utils import db_connect
 
 frontier = multiprocessing.Queue()
 manager = multiprocessing.Manager()
-shared_dict = manager.dict()
+visited_dict = manager.dict()
+roots_dict = manager.dict()
 
 class Worker:
 
@@ -42,6 +43,7 @@ class Worker:
         self.driver = None
         self.db_connection = None
         self.robots_parser = urllib.robotparser.RobotFileParser()
+        self.root_name = ""
 
     def __get_chrome_driver(self):
         # TODO - Pretend to be a browser
@@ -60,9 +62,12 @@ class Worker:
         domain = '{uri.netloc}/'.format(uri=parsed_uri)
         return domain
 
+    def to_canonical(self, url: str):
+        return urlcanon.semantic(urlcanon.parse_url(url))
+
     def parse_robots(self, url: str):
         # Standard robot parser
-        path = urlcanon.semantic(urlcanon.parse_url(url)) + "robots.txt"
+        path = self.to_canonical(url) + "robots.txt"
         self.robots_parser.set_url(path)
         self.robots_parser.read()
 
@@ -75,7 +80,7 @@ class Worker:
             contents = urllib.request.urlopen(link).read()
             soup = BeautifulSoup(contents, 'html.parser')
             for loc in soup.find_all("loc"):
-                if loc.contents not in shared_dict.keys():
+                if self.to_canonical(loc.contents) not in visited_dict.keys() and ".gov.si" in loc.contents:
                     frontier.put(loc.contents)
 
         return self.robots_parser
@@ -93,30 +98,33 @@ class Worker:
         # TODO Try catch and error detection here
 
         try:
+
+            # Check if we already saw this root domain
             rootd = self.get_root_domain(url)
+            self.root_name = rootd
 
-            if rootd in shared_dict.keys():
-                self.robots_parser = shared_dict[rootd]
+            if rootd in roots_dict.keys():
+                self.robots_parser = roots_dict[rootd]
             else:
-                shared_dict[rootd] = self.parse_robots(rootd)
-                self.robots_parser = shared_dict[rootd]
+                roots_dict[rootd] = self.parse_robots(rootd)
+                self.robots_parser = roots_dict[rootd]
 
-            curl = urlcanon.semantic(urlcanon.parse_url(url))
+            curl = self.to_canonical(url)
 
-            if curl not in shared_dict.keys() and self.robots_parser.can_fetch("*", curl):
+            if curl not in visited_dict.keys() and self.robots_parser.can_fetch("*", curl) and ".gov.si" in curl:
                 # TODO More advanced already visited detection, ex. reverse hash functions
-                shared_dict[curl] = None
-                cd = self.robots_parser.crawl_delay("*")
+                visited_dict[curl] = None
 
+                cd = self.robots_parser.crawl_delay("*")
                 if cd is not None:
                     time.sleep(int(cd))
                 else:
                     time.sleep(0.5)
 
                 self.driver.get(url)
+                # TODO check if page is similar to some other one with the hash crap
                 self.parse_page_content()
-            else:
-                pass
+
         except Exception as ex:
             print(ex)
             pass
@@ -126,8 +134,8 @@ class Worker:
         soup = BeautifulSoup(self.driver.page_source, 'html.parser')
         hrefs = [a.get("href") for a in soup.find_all('a', href=True) if validators.url(a.get("href"))]
 
-        [frontier.put(href) for href in hrefs if urlcanon.semantic(urlcanon.parse_url(href))
-         not in shared_dict.keys() and ".gov.si" in href]
+        [frontier.put(href) for href in hrefs if self.to_canonical(href)
+         not in visited_dict.keys() and ".gov.si" in href]
 
         images = [a.get for a in soup.find_all('img')]
 
