@@ -14,6 +14,7 @@ from selenium.webdriver.chrome.options import Options
 
 
 import urllib.robotparser
+from urllib.parse import urlparse
 import urlcanon
 import validators
 
@@ -27,6 +28,7 @@ manager = multiprocessing.Manager()
 shared_dict = manager.dict()
 
 class Worker:
+
     """ Base class for web crawler.
 
     TODO: - HTTP downloader and renderer: To retrieve and render a web page.
@@ -42,6 +44,7 @@ class Worker:
         self.robots_parser = urllib.robotparser.RobotFileParser()
 
     def __get_chrome_driver(self):
+        # TODO - Pretend to be a browser
         chrome_options = Options()
         chrome_options.add_argument('--headless')
 
@@ -51,6 +54,11 @@ class Worker:
             driver_path = os.path.join(os.getcwd(), 'chromedriver')
 
         self.driver = webdriver.Chrome(driver_path, options=chrome_options)
+
+    def get_root_domain(self, url: str):
+        parsed_uri = urlparse(url)
+        domain = '{uri.netloc}/'.format(uri=parsed_uri)
+        return domain
 
     def parse_robots(self, url: str):
         # Standard robot parser
@@ -70,6 +78,8 @@ class Worker:
                 if loc.contents not in shared_dict.keys():
                     frontier.put(loc.contents)
 
+        return self.robots_parser
+
     def fetch_url(self, url: str):
 
         # TODO: here we must check status codes
@@ -83,13 +93,26 @@ class Worker:
         # TODO Try catch and error detection here
 
         try:
-            self.parse_robots(url)
+            rootd = self.get_root_domain(url)
 
-            if url not in shared_dict.keys() and self.robots_parser.can_fetch("*", url):
+            if rootd in shared_dict.keys():
+                self.robots_parser = shared_dict[rootd]
+            else:
+                shared_dict[rootd] = self.parse_robots(rootd)
+                self.robots_parser = shared_dict[rootd]
+
+            curl = urlcanon.semantic(urlcanon.parse_url(url))
+
+            if curl not in shared_dict.keys() and self.robots_parser.can_fetch("*", curl):
                 # TODO More advanced already visited detection, ex. reverse hash functions
-                shared_dict[url] = 1
-                if self.robots_parser.crawl_delay("*") is not None:
-                    time.sleep(int(self.robots_parser.crawl_delay("*")))
+                shared_dict[curl] = None
+                cd = self.robots_parser.crawl_delay("*")
+
+                if cd is not None:
+                    time.sleep(int(cd))
+                else:
+                    time.sleep(0.5)
+
                 self.driver.get(url)
                 self.parse_page_content()
             else:
@@ -99,19 +122,20 @@ class Worker:
             pass
 
     def parse_page_content(self,):
-
-        # Parse all links and put them in the frontier
+        # Parse all links and put them in the frontier after checking they're '.gov.si'
         soup = BeautifulSoup(self.driver.page_source, 'html.parser')
         hrefs = [a.get("href") for a in soup.find_all('a', href=True) if validators.url(a.get("href"))]
-        [frontier.put(href) for href in hrefs if href not in shared_dict.keys()]
+
+        [frontier.put(href) for href in hrefs if urlcanon.semantic(urlcanon.parse_url(href))
+         not in shared_dict.keys() and ".gov.si" in href]
 
         images = [a.get for a in soup.find_all('img')]
+
         # TODO Implement JS onclick in beautiful soup
         # TODO Filter bad images
         # TODO how to handle JS - depends on wether we want to always run Selenium or not
         # scripts = [a for a in soup.find_all('script')]
         # pprint(scripts)
-        pass
         # print(self.driver.page_source)
 
     def dequeue_url(self):
