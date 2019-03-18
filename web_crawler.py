@@ -44,6 +44,7 @@ class Worker:
         self.db_connection = None
         self.robots_parser = urllib.robotparser.RobotFileParser()
         self.root_name = ""
+        self.current_page = ""
 
     def __get_chrome_driver(self):
         # TODO - Pretend to be a browser
@@ -112,8 +113,8 @@ class Worker:
             curl = self.to_canonical(url)
 
             if curl not in visited_dict.keys() and self.robots_parser.can_fetch("*", curl) and ".gov.si" in curl:
-                # TODO More advanced already visited detection, ex. reverse hash functions
                 visited_dict[curl] = None
+                self.current_page = curl
 
                 cd = self.robots_parser.crawl_delay("*")
                 if cd is not None:
