@@ -236,7 +236,13 @@ if __name__ == "__main__":
         'http://evem.gov.si/',
         'https://e-uprava.gov.si/',
         'https://podatki.gov.si/',
-        'http://www.e-prostor.gov.si/'
+        'http://www.e-prostor.gov.si/',
+        # additional
+        'http://www.gov.si/',
+        'http://prostor3.gov.si/preg/',
+        'https://egp.gu.gov.si/egp/',
+        'http://www.gu.gov.si/',
+        'https://gis.gov.si/ezkn/'
     ]
     for site in sites:
         frontier.put(site)
