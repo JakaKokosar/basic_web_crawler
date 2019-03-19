@@ -27,7 +27,6 @@ manager = multiprocessing.Manager()
 visited_dict = manager.dict()
 roots_dict = manager.dict()
 
-
 class Worker:
 
     """ Base class for web crawler.
@@ -99,7 +98,6 @@ class Worker:
         # TODO Try catch and error detection here
 
         try:
-
             # Check if we already saw this root domain
             rootd = self.get_root_domain(url)
             self.root_name = rootd
