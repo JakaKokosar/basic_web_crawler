@@ -67,23 +67,23 @@ class Worker:
 
     def parse_robots(self, url: str):
         # Standard robot parser
-        path = str(self.to_canonical(url)) + "robots.txt"
-        self.robots_parser.set_url(path)
-        self.robots_parser.read()
+        try:
+            path = str(self.to_canonical(url)) + "robots.txt"
+            response = requests.get(path, timeout=5)
+            self.robots_parser.set_url(path)
+            lines = response.text.split("\n")
+            self.robots_parser.parse(lines)
 
-        # Sitemap parsing
-        contents = urllib.request.urlopen(path).read().decode("utf-8")
-        sitemaps = [line for line in contents.split("\n") if "Sitemap" in line]
-        links = [link.split(" ")[1] for link in sitemaps]
+            # Sitemap parsing
+            sitemaps = [line for line in lines if "Sitemap" in line]
+            links = [link.split(" ")[1] for link in sitemaps]
 
-        for link in links:
-            contents = urllib.request.urlopen(link).read()
-            soup = BeautifulSoup(contents, 'html.parser')
-            for loc in soup.find_all("loc"):
-                if self.to_canonical(loc.contents) not in visited_dict.keys() and ".gov.si" in loc.contents:
-                    frontier.put(loc.contents)
-
-        return self.robots_parser
+            for link in links:
+                if not self.is_government_url(link) or self.is_already_visited(link):
+                    continue
+                frontier.put(link)
+        except Exception as e:
+            print("Http error while fetching " + path)
 
     def fetch_url(self, url: str):
 
@@ -105,8 +105,8 @@ class Worker:
             if rootd in roots_dict.keys():
                 self.robots_parser = roots_dict[rootd]
             else:
-                roots_dict[rootd] = self.parse_robots(rootd)
-                self.robots_parser = roots_dict[rootd]
+                self.parse_robots(rootd)
+                roots_dict[rootd] = self.robots_parser
 
             curl = str(self.to_canonical(url))
 
@@ -114,6 +114,7 @@ class Worker:
                 return not self.is_already_visited(url) and self.is_allowed_by_robots(url) and self.is_government_url(curl)
 
             if not should_fetch_url(curl):
+                print("Url " + curl + " not allowed! Skipping ...")
                 return
 
             visited_dict[curl] = None
@@ -125,12 +126,10 @@ class Worker:
             else:
                 time.sleep(0.5)
 
-            print("Frontier size before request: " + frontier.qsize())
             print("Requesting " + str(url))
-            self.driver.feget(url)
+            # self.driver.feget(url)
             # TODO check if page is similar to some other one with the hash crap
             self.parse_page_content()
-            print("Frontier size after request: " + frontier.qsize())
 
         except Exception as ex:
             print(ex)
@@ -143,11 +142,16 @@ class Worker:
         soup = BeautifulSoup(self.driver.page_source, 'html.parser')
         hrefs = [a.get("href") for a in soup.find_all('a', href=True) if validators.url(a.get("href"))]
 
+        print("Received " + str(len(hrefs)) + " potential new urls")
+
+        added = 0
         for href in hrefs:
             canonical = str(self.to_canonical(href))
             if not self.is_government_url(canonical) or self.is_already_visited(canonical):
                 continue
             frontier.put(canonical)
+            added += 1
+        print("Added " + str(added) + " new urls")
 
         images = [a.get for a in soup.find_all('img')]
 
@@ -172,15 +176,15 @@ class Worker:
 
     def __call__(self):
         # connect to PostgreSQL database
-        self.db_connection = db_connect()
-        print(self.db_connection)
-
+        # self.db_connection = db_connect()
+        # print(self.db_connection)
+        #
         self.__get_chrome_driver()
-
-        # TODO: gracefully close connection,
-        #       when process is finished.
-        self.db_connection.close()
-        print(self.db_connection)
+        #
+        # # TODO: gracefully close connection,
+        # #       when process is finished.
+        # self.db_connection.close()
+        # print(self.db_connection)
 
         return self.dequeue_url()
 
@@ -201,15 +205,15 @@ if __name__ == "__main__":
     worker = Worker()
 
     sites = [
-        'http://evem.gov.si/',
-        'https://e-uprava.gov.si/',
-        'https://podatki.gov.si/',
+        # 'http://evem.gov.si/',
+        # 'https://e-uprava.gov.si/',
+        # 'https://podatki.gov.si/',
         'http://www.e-prostor.gov.si/'
     ]
     for site in sites:
         frontier.put(site)
 
-    workers = 4
+    workers = 1
     with ProcessPoolExecutor(max_workers=workers) as executor:
         def submit_worker(_f):
             _future = executor.submit(_f)
