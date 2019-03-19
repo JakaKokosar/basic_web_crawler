@@ -232,8 +232,6 @@ def _future_callback(future: Future):
 
 
 if __name__ == "__main__":
-    worker = Worker()
-
     sites = [
         'http://evem.gov.si/',
         'https://e-uprava.gov.si/',
@@ -250,7 +248,7 @@ if __name__ == "__main__":
             _future.add_done_callback(_future_callback)
             return _future
 
-        futures = [submit_worker(worker) for _ in range(workers)]
+        futures = [submit_worker(Worker()) for _ in range(workers)]
 
         # while True:
         #     in_num = input()
