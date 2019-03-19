@@ -145,6 +145,7 @@ class Worker:
         hashed = hash_document(document)
         if hashed in documents_dict:
             print("Already visited! Skipping ...")
+            return
         else:
             documents_dict[hashed] = True # TODO: - What value here??
 
