@@ -21,11 +21,13 @@ import validators
 from bs4 import BeautifulSoup
 
 from utils import db_connect
+from hashing import *
 
 frontier = multiprocessing.Queue()
 manager = multiprocessing.Manager()
 visited_dict = manager.dict()
 roots_dict = manager.dict()
+documents_dict = manager.dict()
 
 class Worker:
 
@@ -139,7 +141,15 @@ class Worker:
         # Parse all links and put them in the frontier after checking they're '.gov.si'
         print("Did receive " + str(self.current_page))
 
-        soup = BeautifulSoup(self.driver.page_source, 'html.parser')
+        document = self.driver.page_source
+        hashed = hash_document(document)
+        if hashed in documents_dict:
+            print("Already visited! Skipping ...")
+            return
+        else:
+            documents_dict[hashed] = True # TODO: - What value here??
+
+        soup = BeautifulSoup(document, 'html.parser')
         hrefs = [a.get("href") for a in soup.find_all('a', href=True) if validators.url(a.get("href"))]
 
         print("Received " + str(len(hrefs)) + " potential new urls")
