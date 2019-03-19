@@ -222,7 +222,7 @@ if __name__ == "__main__":
     for site in sites:
         frontier.put(site)
 
-    workers = 1
+    workers = 4
     with ProcessPoolExecutor(max_workers=workers) as executor:
         def submit_worker(_f):
             _future = executor.submit(_f)
