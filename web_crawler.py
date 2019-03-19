@@ -232,13 +232,17 @@ def _future_callback(future: Future):
 
 
 if __name__ == "__main__":
-    worker = Worker()
-
     sites = [
         'http://evem.gov.si/',
         'https://e-uprava.gov.si/',
         'https://podatki.gov.si/',
-        'http://www.e-prostor.gov.si/'
+        'http://www.e-prostor.gov.si/',
+        # additional
+        'http://www.gov.si/',
+        'http://prostor3.gov.si/preg/',
+        'https://egp.gu.gov.si/egp/',
+        'http://www.gu.gov.si/',
+        'https://gis.gov.si/ezkn/'
     ]
     for site in sites:
         frontier.put(site)
@@ -250,7 +254,7 @@ if __name__ == "__main__":
             _future.add_done_callback(_future_callback)
             return _future
 
-        futures = [submit_worker(worker) for _ in range(workers)]
+        futures = [submit_worker(Worker()) for _ in range(workers)]
 
         # while True:
         #     in_num = input()
