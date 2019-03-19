@@ -127,7 +127,7 @@ class Worker:
                 time.sleep(0.5)
 
             print("Requesting " + str(url))
-            # self.driver.feget(url)
+            self.driver.get(curl)
             # TODO check if page is similar to some other one with the hash crap
             self.parse_page_content()
 
