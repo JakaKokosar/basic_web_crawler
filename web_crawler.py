@@ -29,6 +29,8 @@ visited_dict = manager.dict()
 roots_dict = manager.dict()
 documents_dict = manager.dict()
 
+supported_files = [".pdf", ".doc", ".docx", ".ppt", ".pptx"]
+
 class Worker:
 
     """ Base class for web crawler.
@@ -178,7 +180,10 @@ class Worker:
 
     def download_file(self, url, path="output/"):
         request = requests.get(url, allow_redirects=True)
-        with open(url, 'wb') as handle:
+        file_name = url.split("/")[-1:][0]
+        with open(file_name, 'wb') as handle:
+            # TODO: - not sure why appending `output/` to the beginning of the line
+            # doesnt work ??
             handle.write(request.content)
 
     def dequeue_url(self):
@@ -217,7 +222,6 @@ class Worker:
         return self.robots_parser.can_fetch("*", url)
 
     def should_download_and_save_file(self, url):
-        supported_files = [".pdf", ".doc", ".docx", ".ppt", ".pptx"]
         for f in supported_files: # TODO: - refactor this using python magic
             if f in url:
                 return True
