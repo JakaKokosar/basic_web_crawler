@@ -29,6 +29,8 @@ visited_dict = manager.dict()
 roots_dict = manager.dict()
 documents_dict = manager.dict()
 
+supported_files = [".pdf", ".doc", ".docx", ".ppt", ".pptx"]
+
 class Worker:
 
     """ Base class for web crawler.
@@ -128,10 +130,14 @@ class Worker:
             else:
                 time.sleep(0.5)
 
-            print("Requesting " + str(url))
-            self.driver.get(curl)
-            # TODO check if page is similar to some other one with the hash crap
-            self.parse_page_content()
+            if self.should_download_and_save_file(curl):
+                print("Downloading file " + str(url))
+                self.download_file(url, "output/")
+            else:
+                print("Requesting " + str(url))
+                self.driver.get(curl)
+                # TODO check if page is similar to some other one with the hash crap
+                self.parse_page_content()
 
         except Exception as ex:
             print(ex)
@@ -172,6 +178,14 @@ class Worker:
         # pprint(scripts)
         # print(self.driver.page_source)
 
+    def download_file(self, url, path="output/"):
+        request = requests.get(url, allow_redirects=True)
+        file_name = url.split("/")[-1:][0]
+        with open(file_name, 'wb') as handle:
+            # TODO: - not sure why appending `output/` to the beginning of the line
+            # doesnt work ??
+            handle.write(request.content)
+
     def dequeue_url(self):
         # Fetch URLs from Frontier.
         while True:
@@ -206,6 +220,12 @@ class Worker:
 
     def is_allowed_by_robots(self, url):
         return self.robots_parser.can_fetch("*", url)
+
+    def should_download_and_save_file(self, url):
+        for f in supported_files: # TODO: - refactor this using python magic
+            if f in url:
+                return True
+        return False
 
 def _future_callback(future: Future):
     print(future.result())
