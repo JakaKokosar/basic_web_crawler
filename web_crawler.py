@@ -22,11 +22,11 @@ from bs4 import BeautifulSoup
 
 from utils import db_connect
 
-
 frontier = multiprocessing.Queue()
 manager = multiprocessing.Manager()
 visited_dict = manager.dict()
 roots_dict = manager.dict()
+
 
 class Worker:
 
@@ -110,21 +110,29 @@ class Worker:
                 roots_dict[rootd] = self.parse_robots(rootd)
                 self.robots_parser = roots_dict[rootd]
 
-            curl = self.to_canonical(url)
+            curl = str(self.to_canonical(url))
 
-            if curl not in visited_dict.keys() and self.robots_parser.can_fetch("*", curl) and ".gov.si" in curl:
-                visited_dict[curl] = None
-                self.current_page = curl
+            def should_fetch_url(url):
+                return not self.is_already_visited(url) and self.is_allowed_by_robots(url) and self.is_government_url(curl)
 
-                cd = self.robots_parser.crawl_delay("*")
-                if cd is not None:
-                    time.sleep(int(cd))
-                else:
-                    time.sleep(0.5)
+            if not should_fetch_url(curl):
+                return
 
-                self.driver.get(url)
-                # TODO check if page is similar to some other one with the hash crap
-                self.parse_page_content()
+            visited_dict[curl] = None
+            self.current_page = curl
+
+            crawl_delay = self.robots_parser.crawl_delay("*")
+            if crawl_delay:
+                time.sleep(int(crawl_delay))
+            else:
+                time.sleep(0.5)
+
+            print("Frontier size before request: " + frontier.qsize())
+            print("Requesting " + str(url))
+            self.driver.feget(url)
+            # TODO check if page is similar to some other one with the hash crap
+            self.parse_page_content()
+            print("Frontier size after request: " + frontier.qsize())
 
         except Exception as ex:
             print(ex)
@@ -132,11 +140,16 @@ class Worker:
 
     def parse_page_content(self,):
         # Parse all links and put them in the frontier after checking they're '.gov.si'
+        print("Did receive " + str(self.current_page))
+
         soup = BeautifulSoup(self.driver.page_source, 'html.parser')
         hrefs = [a.get("href") for a in soup.find_all('a', href=True) if validators.url(a.get("href"))]
 
-        [frontier.put(href) for href in hrefs if self.to_canonical(href)
-         not in visited_dict.keys() and ".gov.si" in href]
+        for href in hrefs:
+            canonical = str(self.to_canonical(href))
+            if not self.is_government_url(canonical) or self.is_already_visited(canonical):
+                continue
+            frontier.put(canonical)
 
         images = [a.get for a in soup.find_all('img')]
 
@@ -173,6 +186,14 @@ class Worker:
 
         return self.dequeue_url()
 
+    def is_government_url(self, url):
+        return ".gov.si" in url
+
+    def is_already_visited(self, url):
+        return url in visited_dict.keys()
+
+    def is_allowed_by_robots(self, url):
+        return self.robots_parser.can_fetch("*", url)
 
 def _future_callback(future: Future):
     print(future.result())
