@@ -68,7 +68,7 @@ class Worker:
 
     def parse_robots(self, url: str):
         # Standard robot parser
-        path = self.to_canonical(url) + "robots.txt"
+        path = str(self.to_canonical(url)) + "robots.txt"
         self.robots_parser.set_url(path)
         self.robots_parser.read()
 
