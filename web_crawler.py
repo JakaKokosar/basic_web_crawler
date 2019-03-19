@@ -247,7 +247,7 @@ if __name__ == "__main__":
     for site in sites:
         frontier.put(site)
 
-    workers = 4
+    workers = int(sys.argv[1]) if len(sys.argv) >= 2 else 4
     with ProcessPoolExecutor(max_workers=workers) as executor:
         def submit_worker(_f):
             _future = executor.submit(_f)
