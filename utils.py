@@ -19,27 +19,12 @@ class DBConn:
     def __init__(self, db_auth=db_auth):
         self.connection = psycopg2.connect(**db_auth)
         self.cursor = self.connection.cursor()
-        self.is_occupied = False
 
+    def release(self):
+        self.connection.close()
 
-# Pool of connection objects to minimize number of connections to the db
-# since we have a fixed number of workers, the pool can also have a constant number of connections
-class DBConnPool:
-    def __init__(self, pool_size):
-        self.connections = [DBConn() for _ in range(pool_size)]
-
-    def request_connection(self):
-        non_occupied_connection = [conn for conn in self.connections if not conn.is_occupied]
-        if len(non_occupied_connection) == 0:
-            return None
-        conn = non_occupied_connection[0]
-        conn.is_occupied = True
-        return conn
-
-    def release_connection(self, conn):
-        conn.is_occupied = False
-        conn.connection.commit()
-
+    def commit(self):
+        self.connection.commit()
 
 class DBApi:
     def __init__(self, conn):
@@ -53,7 +38,7 @@ class DBApi:
     # save `page` linked to specific `site` and return ID
     def insert_page(self, site_id, page_type_code, url, html_content, http_status_code, accessed_time):
         sql = "insert into crawldb.page (site_id, page_type_code, url, html_content, http_status_code, accessed_time) VALUES (%s, %s, %s, %s, %s, %s) RETURNING ID"
-        return self._execute(sql, (site_id, page_type_code, url, html_content, accessed_time))
+        return self._execute(sql, (site_id, page_type_code, url, html_content, http_status_code, accessed_time))
 
     # save `page_data` linked to specific `page` and return ID
     def insert_page_data(self, page_id, data_type_code, data):
@@ -69,6 +54,7 @@ class DBApi:
     def _execute(self, sql, data):
         cursor = self.conn.cursor
         cursor.execute(sql, data)
+        self.conn.commit()
         id = cursor.fetchone()[0]
         return id
 
@@ -91,10 +77,8 @@ class DBApi:
 
 if __name__ == "__main__":
     # create_tables()
-    pool = DBConnPool(4)
-    conn = pool.request_connection()
+    conn = DBConn()
     api = DBApi(conn)
     id = api.insert_site("http://gov.si", "test", "test2")
-    api.insert_page(id, "HTML", "http:page/gov.si", "<html><body></body></html>", 200, "2019-03-21 12:16:11.988000")
-    pool.release_connection(conn)
-
+    api.insert_page(id, "HTML", "http:subpage/gov.si", "<html><body></body></html>", 200, "2019-03-21 12:16:11.988000")
+    conn.release()
