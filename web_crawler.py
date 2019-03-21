@@ -4,35 +4,42 @@ import sys
 import os
 import time
 import requests
-import urllib.request
 import multiprocessing
-
-from queue import Empty
-from concurrent.futures import ProcessPoolExecutor, Future, ALL_COMPLETED, wait
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-
-
-import urllib.robotparser
-from urllib.parse import urlparse
+import urllib3
 import urlcanon
 import validators
 
+from queue import Empty
+from selenium import webdriver
 from bs4 import BeautifulSoup
+from selenium.webdriver.chrome.options import Options
+from concurrent.futures import ProcessPoolExecutor, Future, ALL_COMPLETED, wait
+from urllib import robotparser, request, parse
 
-from utils import db_connect
+
+from utils import DBConn
 from hashing import *
 
 frontier = multiprocessing.Queue()
 manager = multiprocessing.Manager()
 visited_dict = manager.dict()
-roots_dict = manager.dict()
+site_domains = manager.dict()
 documents_dict = manager.dict()
 
-supported_files = [".pdf", ".doc", ".docx", ".ppt", ".pptx"]
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+download_dir = "data/"
+supported_files = [".pdf", ".doc", ".docx", ".ppt", ".pptx", "mp4", "mp3"]
+
+try:
+    os.makedirs(download_dir)
+except OSError as e:
+    pass
+
 
 class Worker:
-
     """ Base class for web crawler.
 
     TODO: - HTTP downloader and renderer: To retrieve and render a web page.
@@ -45,107 +52,129 @@ class Worker:
     def __init__(self):
         self.driver = None
         self.db_connection = None
-        self.robots_parser = urllib.robotparser.RobotFileParser()
         self.root_name = ""
         self.current_page = ""
 
     def __get_chrome_driver(self):
         # TODO - Pretend to be a browser
         chrome_options = Options()
-        chrome_options.add_argument('--headless')
+        chrome_options.add_argument("--headless")
 
-        if sys.platform == 'win32':
-            driver_path = os.path.join(os.getcwd(), 'chromedriver.exe')
+        if sys.platform == "win32":
+            driver_path = os.path.join(os.getcwd(), "chromedriver.exe")
         else:
-            driver_path = os.path.join(os.getcwd(), 'chromedriver')
+            driver_path = os.path.join(os.getcwd(), "chromedriver")
 
         self.driver = webdriver.Chrome(driver_path, options=chrome_options)
 
-    def get_root_domain(self, url: str):
-        parsed_uri = urlparse(url)
-        domain = '{uri.netloc}/'.format(uri=parsed_uri)
-        return domain
-
-    def to_canonical(self, url: str):
-        return urlcanon.semantic(urlcanon.parse_url(url))
-
     def parse_robots(self, url: str):
-        # Standard robot parser
-        try:
-            path = str(self.to_canonical(url)) + "robots.txt"
-            response = requests.get(path, timeout=5)
-            self.robots_parser.set_url(path)
-            lines = response.text.split("\n")
-            self.robots_parser.parse(lines)
+        """  Standard robot parser
+        """
+        site_domain = self.get_domain_from_url(url)
+        if site_domain in site_domains:
+            # we have already saw this site
+            return site_domains.get(site_domain, None)
+        else:
+            # first time we are on this domain, check for robots.txt, parse it, save it!
+            robots_location = url + "robots.txt"
+            robots_content = []
+            try:
+                response = requests.get(robots_location, timeout=5)
+                response.raise_for_status()
+                robots_content = response.text.split("\n")
+            except requests.exceptions.RequestException as err:
+                # This is a general request exception. Should we care about if something went wrong?
+                # For now we assume that robots.txt in unavailable or is not present at all.
+                # TODO: this should be logs not prints.
+                print(
+                    "Unexpected error when requesting robots.txt for {}".format(url),
+                    err,
+                )
+
+            robot_file_parser = robotparser.RobotFileParser()
+            robot_file_parser.set_url(robots_location)
+            robot_file_parser.parse(robots_content)
 
             # Sitemap parsing
-            sitemaps = [line for line in lines if "Sitemap" in line]
+            sitemaps = [line for line in robots_content if "Sitemap" in line]
             links = [link.split(" ")[1] for link in sitemaps]
 
             for link in links:
-                if not self.is_government_url(link) or self.is_already_visited(link):
-                    continue
+                # Todo: Make sure our content parser knows how to handle xml. Sitemaps are
+                #       usually in xml format. This is unhandled at this point!!!!!!!!!!!!!!!!!!!!!
+                #       Also i skipped is_goverment_url and already_visited check. No need to check this here, i guess?
+                #       Should we parse sitemap xml at this point? And not just putting it in frontier?
+                #       Find solutions guys :D
                 frontier.put(link)
-        except Exception as e:
-            print("Http error while fetching " + path)
+
+            site_domains[site_domain] = robot_file_parser
+            return robot_file_parser
+
+    def parse_url(self, url: str):
+        # unify url representation
+        url = str(self.to_canonical_form(url))
+
+        # get robot parser object for current site domain.
+        robot_parser = self.parse_robots(url)
+
+        # Note: this was changed just for readability issues.
+        #       Now we can debug why was url skipped.
+        if self.is_already_visited(url):
+            print("URL: {} already visited! Skipping ...".format(url))
+            return
+        elif robot_parser is not None and not self.is_allowed_by_robots(
+            url, robot_parser
+        ):
+            print("URL: {} Not allowed by robots.txt! Skipping ...".format(url))
+            return
+        elif not self.is_government_url(url):
+            print("URL: {} Not from gov.si domain! Skipping ...".format(url))
+            return
+
+        # URL passed all checks. We can store it as visited.
+        visited_dict[url] = True
+
+        self.fetch_url(url)
 
     def fetch_url(self, url: str):
 
-        # TODO: here we must check status codes
-        #       also how to handle timeouts?
-        # response = requests.get(url, timeout=5)
-
-        # Is there a way to fetch page with URL and
-        # then render it with selenium? Would prefer to use
-        # requests module for retrieving page content.
-
-        # TODO Try catch and error detection here
-
         try:
-            # Check if we already saw this root domain
-            rootd = self.get_root_domain(url)
-            self.root_name = rootd
+            response = self.get_response(url)  # this can raise exception
+            status_code = response.status_code
 
-            if rootd in roots_dict.keys():
-                self.robots_parser = roots_dict[rootd]
+            if self.should_download_and_save_file(url):
+                # TODO: this should be done with temprary files until put in database
+                #       https://docs.python.org/2/library/tempfile.html
+                print("Downloading file from: " + str(url))
+                file_path = os.path.join(download_dir, url.split("/")[-1:][0])
+                with open(file_path, "wb") as fp:
+                    fp.write(response.content)
+
+            elif "text/xml" in response.headers["Content-Type"]:
+                # TODO: this is probably a sitemap xml file. Parse links and add to frontier
+                #       Check how to properly extract links from sitemaps.
+                # Deni, i'm mad at you!
+                pass
+
             else:
-                self.parse_robots(rootd)
-                roots_dict[rootd] = self.robots_parser
-
-            curl = str(self.to_canonical(url))
-
-            def should_fetch_url(url):
-                return not self.is_already_visited(url) and self.is_allowed_by_robots(url) and self.is_government_url(curl)
-
-            if not should_fetch_url(curl):
-                print("Url " + curl + " not allowed! Skipping ...")
-                return
-
-            visited_dict[curl] = None
-            self.current_page = curl
-
-            crawl_delay = self.robots_parser.crawl_delay("*")
-            if crawl_delay:
-                time.sleep(int(crawl_delay))
-            else:
-                time.sleep(0.5)
-
-            if self.should_download_and_save_file(curl):
-                print("Downloading file " + str(url))
-                self.download_file(url, "output/")
-            else:
-                print("Requesting " + str(url))
-                self.driver.get(curl)
+                # if its not a file we need to download or xml then presume its some html/javascript payload.
+                # open with selenium to render all the javascript
+                self.driver.get(url)
                 # TODO check if page is similar to some other one with the hash crap
                 self.parse_page_content()
 
-        except Exception as ex:
-            print(ex)
-            pass
+        except requests.exceptions.RequestException as err:
+            # TODO: HANDLE THIS PROPERLY
+            #       ivse seen timeouts and this: HTTPSConnectionPool(host='sicas-x509si.gov.si', port=443):
+            #       Max retries exceeded with url: /idpX509/login?policy=KDP-SI&service=https%3A%2F%2Fsicas.gov.si%2Fbl%2FhandleIdpResponse&lang=si
+            #       (Caused by SSLError(SSLError(1, '[SSL: SSLV3_ALERT_HANDSHAKE_FAILURE] sslv3 alert handshake failure (_ssl.c:1051)')))
+            print("Error at {}".format(url), err)
 
-    def parse_page_content(self,):
+    def parse_page_content(self):
+
+        # TODO: I did not touch this function at all. Sorry :( its 00:15
         # Parse all links and put them in the frontier after checking they're '.gov.si'
-        print("Did receive " + str(self.current_page))
+        # print("Did receive " + str(self.current_page))
 
         document = self.driver.page_source
         hashed = hash_document(document)
@@ -153,23 +182,29 @@ class Worker:
             print("Already visited! Skipping ...")
             return
         else:
-            documents_dict[hashed] = True # TODO: - What value here??
+            documents_dict[hashed] = True  # TODO: - What value here??
 
-        soup = BeautifulSoup(document, 'html.parser')
-        hrefs = [a.get("href") for a in soup.find_all('a', href=True) if validators.url(a.get("href"))]
+        soup = BeautifulSoup(document, "html.parser")
+        hrefs = [
+            a.get("href")
+            for a in soup.find_all("a", href=True)
+            if validators.url(a.get("href"))
+        ]
 
         print("Received " + str(len(hrefs)) + " potential new urls")
 
         added = 0
         for href in hrefs:
-            canonical = str(self.to_canonical(href))
-            if not self.is_government_url(canonical) or self.is_already_visited(canonical):
+            canonical = str(self.to_canonical_form(href))
+            if not self.is_government_url(canonical) or self.is_already_visited(
+                canonical
+            ):
                 continue
             frontier.put(canonical)
             added += 1
         print("Added " + str(added) + " new urls")
 
-        images = [a.get for a in soup.find_all('img')]
+        images = [a.get for a in soup.find_all("img")]
 
         # TODO Implement JS onclick in beautiful soup
         # TODO Filter bad images
@@ -178,25 +213,64 @@ class Worker:
         # pprint(scripts)
         # print(self.driver.page_source)
 
-    def download_file(self, url, path="output/"):
-        request = requests.get(url, allow_redirects=True)
-        file_name = url.split("/")[-1:][0]
-        with open(file_name, 'wb') as handle:
-            # TODO: - not sure why appending `output/` to the beginning of the line
-            # doesnt work ??
-            handle.write(request.content)
-
     def dequeue_url(self):
         # Fetch URLs from Frontier.
         while True:
             try:
                 url = frontier.get(True, timeout=10)
             except Empty:
-                return 'Process {} stopped. No new URLs in Frontier\n'.format(os.getpid())
+                return "Process {} stopped. No new URLs in Frontier\n".format(
+                    os.getpid()
+                )
 
             # print(os.getpid(), "got", url, 'is empty:', frontier.empty())
-            self.fetch_url(url)
-            time.sleep(1)  # simulate a "long" operation
+            self.parse_url(url)
+
+            # This is default delay
+            time.sleep(2)
+
+    @staticmethod
+    def get_response(url: str):
+        """ This is where we fetch url content using request. We need to do that if we want to download files
+            and we need this for storing status codes.
+
+            TODO: can someone check if we must store visited links with bad status codes?
+                  if i'm not mistaken that is the case. please investigate.
+        """
+        try:
+            response = requests.get(url, timeout=5, allow_redirects=True, verify=False)
+            response.raise_for_status()
+        except requests.exceptions.RequestException as err:
+            raise err
+
+        return response
+
+    @staticmethod
+    def is_government_url(url: str):
+        return ".gov.si" in url
+
+    @staticmethod
+    def is_already_visited(url: str):
+        return url in visited_dict.keys()
+
+    @staticmethod
+    def is_allowed_by_robots(url: str, robot: robotparser.RobotFileParser):
+        return robot.can_fetch("*", url)
+
+    @staticmethod
+    def should_download_and_save_file(url):
+        for f in supported_files:  # TODO: - refactor this using python magic
+            if f in url:
+                return True
+        return False
+
+    @staticmethod
+    def get_domain_from_url(url: str):
+        return "{uri.netloc}/".format(uri=parse.urlparse(url))
+
+    @staticmethod
+    def to_canonical_form(url: str):
+        return str(urlcanon.semantic(urlcanon.parse_url(url)))
 
     def __call__(self):
         # connect to PostgreSQL database
@@ -212,20 +286,6 @@ class Worker:
 
         return self.dequeue_url()
 
-    def is_government_url(self, url):
-        return ".gov.si" in url
-
-    def is_already_visited(self, url):
-        return url in visited_dict.keys()
-
-    def is_allowed_by_robots(self, url):
-        return self.robots_parser.can_fetch("*", url)
-
-    def should_download_and_save_file(self, url):
-        for f in supported_files: # TODO: - refactor this using python magic
-            if f in url:
-                return True
-        return False
 
 def _future_callback(future: Future):
     print(future.result())
@@ -233,35 +293,29 @@ def _future_callback(future: Future):
 
 if __name__ == "__main__":
     sites = [
-        'http://evem.gov.si/',
-        'https://e-uprava.gov.si/',
-        'https://podatki.gov.si/',
-        'http://www.e-prostor.gov.si/',
+        "http://evem.gov.si/",
+        "https://e-uprava.gov.si/",
+        "https://podatki.gov.si/",
+        "http://www.e-prostor.gov.si/",
         # additional
-        'http://www.gov.si/',
-        'http://prostor3.gov.si/preg/',
-        'https://egp.gu.gov.si/egp/',
-        'http://www.gu.gov.si/',
-        'https://gis.gov.si/ezkn/'
+        # 'http://www.gov.si/',
+        # 'http://prostor3.gov.si/preg/',
+        # 'https://egp.gu.gov.si/egp/',
+        # 'http://www.gu.gov.si/',
+        # 'https://gis.gov.si/ezkn/'
     ]
     for site in sites:
         frontier.put(site)
 
     workers = int(sys.argv[1]) if len(sys.argv) >= 2 else 4
     with ProcessPoolExecutor(max_workers=workers) as executor:
+
         def submit_worker(_f):
             _future = executor.submit(_f)
             _future.add_done_callback(_future_callback)
             return _future
 
         futures = [submit_worker(Worker()) for _ in range(workers)]
-
-        # while True:
-        #     in_num = input()
-        #     if in_num == 42:
-        #         break
-        #     else:
-        #         frontier.put(in_num)
 
         # This will stop our crawler when none of the running
         # processes cant fetch URL from Frontier
