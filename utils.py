@@ -15,6 +15,7 @@ db_auth = {
     'database': 'postgres'
 }
 
+
 class DBConn:
     def __init__(self, db_auth=db_auth):
         self.connection = psycopg2.connect(**db_auth)
@@ -25,6 +26,7 @@ class DBConn:
 
     def commit(self):
         self.connection.commit()
+
 
 class DBApi:
     def __init__(self, conn):
