@@ -67,6 +67,17 @@ class Worker:
 
         self.driver = webdriver.Chrome(driver_path, options=chrome_options)
 
+    def get_root_domain(self, url: str):
+        parsed_uri = urlparse(url)
+        domain = '{uri.netloc}/'.format(uri=parsed_uri)
+        return domain
+
+    def to_canonical(self, url: str):
+        return urlcanon.semantic(urlcanon.parse_url(url))
+
+    def is_valid_url(self,url: str):
+        return validators.url(url)
+
     def parse_robots(self, url: str):
         """  Standard robot parser
         """
@@ -184,12 +195,10 @@ class Worker:
         else:
             documents_dict[hashed] = True  # TODO: - What value here??
 
-        soup = BeautifulSoup(document, "html.parser")
-        hrefs = [
-            a.get("href")
-            for a in soup.find_all("a", href=True)
-            if validators.url(a.get("href"))
-        ]
+
+        soup = BeautifulSoup(document, 'html.parser')
+        hrefs = [a.get("href") for a in soup.find_all(href=True) if self.is_valid_url(a.get("href"))]
+
 
         print("Received " + str(len(hrefs)) + " potential new urls")
 
@@ -202,16 +211,39 @@ class Worker:
                 continue
             frontier.put(canonical)
             added += 1
-        print("Added " + str(added) + " new urls")
+        print("Added " + str(added) + " new urls from hrefs")
 
-        images = [a.get for a in soup.find_all("img")]
 
-        # TODO Implement JS onclick in beautiful soup
-        # TODO Filter bad images
-        # TODO how to handle JS - depends on wether we want to always run Selenium or not
-        # scripts = [a for a in soup.find_all('script')]
-        # pprint(scripts)
-        # print(self.driver.page_source)
+        # Handling JS onclick
+        # TODO Needs field testing
+        all_tags = soup.find_all()
+        clickables = [str(a.get("onclick")).split("=")[-1].replace('"', '').replace("'", "") for a in all_tags if
+                      "onclick" in str(a)]
+        added = 0
+        for c in clickables:
+            nurl = self.to_canonical(self.current_page) + c
+            if self.is_valid_url(nurl) and self.is_allowed_by_robots(nurl):
+                frontier.put(self.to_canonical(nurl))
+                added+=1
+        print("Added " + str(added) + " new urls from js click")
+
+        # Image collection
+        # TODO Needs field testing
+        images = [a.get("src") for a in soup.find_all('img')]
+        image_sources = []
+        added = 0
+        for imgs in images:
+            if self.is_valid_url(imgs):
+                image_sources.append(imgs)
+                added += 1
+            elif self.is_valid_url(self.to_canonical(self.current_page)+imgs):
+                    image_sources.append(imgs)
+                    added += 1
+            else:
+                print("Could not parse image link "+imgs)
+
+
+        print("Added " + str(added) + " new images to list")
 
     def dequeue_url(self):
         # Fetch URLs from Frontier.
