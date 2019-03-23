@@ -3,6 +3,8 @@
 import sys
 import os
 import time
+from urllib.parse import urlparse
+
 import requests
 import multiprocessing
 import urllib3
@@ -16,7 +18,7 @@ from selenium.webdriver.chrome.options import Options
 from concurrent.futures import ProcessPoolExecutor, Future, ALL_COMPLETED, wait
 from urllib import robotparser, request, parse
 
-
+import sitemap
 from utils import DBConn
 from hashing import *
 
@@ -110,13 +112,17 @@ class Worker:
             sitemaps = [line for line in robots_content if "Sitemap" in line]
             links = [link.split(" ")[1] for link in sitemaps]
 
+            added_count = 0
             for link in links:
-                # Todo: Make sure our content parser knows how to handle xml. Sitemaps are
-                #       usually in xml format. This is unhandled at this point!!!!!!!!!!!!!!!!!!!!!
-                #       Also i skipped is_goverment_url and already_visited check. No need to check this here, i guess?
-                #       Should we parse sitemap xml at this point? And not just putting it in frontier?
-                #       Find solutions guys :D
-                frontier.put(link)
+                req = requests.get(link)
+                sitemap_urls = sitemap.parse_xml(req.text)
+                for url in sitemap_urls:
+                    if not self.is_government_url(url) or self.is_already_visited(url):
+                        continue
+                    frontier.put(url)
+                    added_count += 1
+
+            print("Added %d urls from sitemap!" % added_count)
 
             site_domains[site_domain] = robot_file_parser
             return robot_file_parser
@@ -217,11 +223,14 @@ class Worker:
         # Handling JS onclick
         # TODO Needs field testing
         all_tags = soup.find_all()
-        clickables = [str(a.get("onclick")).split("=")[-1].replace('"', '').replace("'", "") for a in all_tags if
-                      "onclick" in str(a)]
+        clickables = [
+            str(a.get("onclick")).split("=")[-1].replace('"', '').replace("'", "")
+            for a in all_tags
+            if"onclick" in str(a)
+        ]
         added = 0
         for c in clickables:
-            nurl = self.to_canonical(self.current_page) + c
+            nurl = str(self.to_canonical(self.current_page)) + c
             if self.is_valid_url(nurl) and self.is_allowed_by_robots(nurl):
                 frontier.put(self.to_canonical(nurl))
                 added+=1
@@ -236,9 +245,9 @@ class Worker:
             if self.is_valid_url(imgs):
                 image_sources.append(imgs)
                 added += 1
-            elif self.is_valid_url(self.to_canonical(self.current_page)+imgs):
-                    image_sources.append(imgs)
-                    added += 1
+            elif self.is_valid_url(str(self.to_canonical(self.current_page))+imgs):
+                image_sources.append(imgs)
+                added += 1
             else:
                 print("Could not parse image link "+imgs)
 
@@ -323,6 +332,8 @@ def _future_callback(future: Future):
     print(future.result())
 
 
+DEFAULT_CONCURRENT_WORKERS = 4
+
 if __name__ == "__main__":
     sites = [
         "http://evem.gov.si/",
@@ -339,7 +350,7 @@ if __name__ == "__main__":
     for site in sites:
         frontier.put(site)
 
-    workers = int(sys.argv[1]) if len(sys.argv) >= 2 else 4
+    workers = int(sys.argv[1]) if len(sys.argv) >= 2 else DEFAULT_CONCURRENT_WORKERS
     with ProcessPoolExecutor(max_workers=workers) as executor:
 
         def submit_worker(_f):
