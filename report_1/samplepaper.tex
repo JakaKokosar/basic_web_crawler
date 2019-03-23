@@ -1,0 +1,59 @@
+
+\documentclass[runningheads]{llncs}
+\usepackage{graphicx}
+\usepackage{apacite}
+\usepackage{float}
+
+\begin{document}
+
+\title{Programming Assignment 1}
+\subtitle{Designing a web crawler}
+
+\author{
+  Jaka Kokošar
+  \and
+  Danijel Maraž
+  \and
+  Toni Kocjan
+}
+
+
+\institute{Fakulteta za Računalništvo in Informatiko UL
+\email{dm9929@student.uni-lj.si}\\
+}
+
+\maketitle             
+
+\begin{abstract}
+The article covers the work done in the scope of the first programming assignment as part of the subject web information extraction and retrieval. 
+
+\keywords{Data Extraction Retrieval Web Crawler Database Python \and Second keyword \and Another keyword.}
+\end{abstract}
+
+\section{Introduction}
+A web crawler is surely one of the most interesting pieces of software we can write. Mainly because it involves both the world wide web as well as efficient information retrieval and storing with the help of a back end database along with the robustness to handle anything the internet can throw at it. Because of this we decided to implement our crawler in Python which isn't the fastest language but is nice to read and not very verbose along with it's very simple database and web interaction libraries. The crawler like all others makes use of a frontier queue and a very standard Breadth First Search (BFS) strategy with multiple workers simultaneously accessing the frontier, adding pages and parsing them. For the page rendering we utilized the Python Selenium TODO (ali res samo selenium?) library which allowed us to interpret Javascript as most modern pages contain it. Naturally one of the most controversial aspects of a web crawler is whether the page owners impose any restrictions on which pages can be accessed and parsed. To tackle this problem we simply checked inside the robots.txt file which provided us with all the information we needed to know regarding the wishes of the site owners as well as a useful site map that gave us more URLs to add to the frontier. TODO nek zakljucek
+
+\section{General structure}
+Our main file \textit{web\_crawler.py} takes as an argument the number of desired worker threads. If no argument is given it defaults to 4. The list \textit{sites} contains the four starting sites as given in the instructions as well as the others chosen by us TODO (zakaj smo izbrali tiste strani). All of the sites are immediately put into our \textit{frontier} queue. The starting arguments are then parsed and the individual worker threads initialized with the \textit{ProcessPoolExecutor} and \textit{submit\_worker} functions. All workers are contained in the list \textit{futures} which with the help of the function \textit{wait} ensures that the program exits when none of the running workers are able to get a new URL from the \textit{frontier} queue.
+The heart of our crawler is the class Worker which implements all the functionalities of one worker thread. Workers are also supported by a set of global and thread safe data structures. 
+
+\subsection{Supporting data structures}
+\begin{itemize}
+  \item The \textit{frontier} queue is the most important supporting data structure. It is implemented using the \textit{Multiprocessing.queue()} class which is thread safe. Workers use it as the main source of new URLs to visit. It contains URLs in a basic canonized \textit{string} form.
+  \item \textit{visited\_dict}
+  \item \textit{site\_domains}
+  \item \textit{documents\_dict}
+\end{itemize}
+
+\subsection{Worker class}
+
+
+
+
+
+ \bibliographystyle{apacite}
+ 
+ \bibliography{references}
+
+
+\end{document}

@@ -1,0 +1,101 @@
+\begin{thebibliography}{}
+
+\bibitem [\protect \citeauthoryear {%
+Bonča%
+}{%
+Bonča%
+}{%
+{\protect \APACyear {2015}}%
+{\protect \APACexlab {{\protect \BCnt {1}}}}}]{%
+sudoku}
+\APACinsertmetastar {%
+sudoku}%
+\begin{APACrefauthors}%
+Bonča, J.%
+\end{APACrefauthors}%
+\unskip\
+\newblock
+\APACrefYearMonthDay{2015{\protect \BCnt {1}}}{}{}.
+\newblock
+\APACrefbtitle {Sudoku 9x9-15.} {Sudoku 9x9-15.}
+\newblock
+\begin{APACrefURL}
+  [{2019-01-13}]\url{https://i.pinimg.com/564x/4c/17/f2/4c17f2454b20fa3200882047d1722684.jpg}
+  \end{APACrefURL}
+\PrintBackRefs{\CurrentBib}
+
+\bibitem [\protect \citeauthoryear {%
+Bonča%
+}{%
+Bonča%
+}{%
+{\protect \APACyear {2015}}%
+{\protect \APACexlab {{\protect \BCnt {2}}}}}]{%
+tipkopisi}
+\APACinsertmetastar {%
+tipkopisi}%
+\begin{APACrefauthors}%
+Bonča, J.%
+\end{APACrefauthors}%
+\unskip\
+\newblock
+\APACrefYearMonthDay{2015{\protect \BCnt {2}}}{}{}.
+\newblock
+\APACrefbtitle {Tipkopisi.} {Tipkopisi.}
+\newblock
+\begin{APACrefURL}
+  [{2019-01-13}]\url{http://likovnodrustvo-kranj.weebly.com/gostujo269e-razstave/jaka-bonca-tipkopisi}
+  \end{APACrefURL}
+\PrintBackRefs{\CurrentBib}
+
+\bibitem [\protect \citeauthoryear {%
+SocialBladeLLC%
+}{%
+SocialBladeLLC%
+}{%
+{\protect \APACyear {2019}}%
+}]{%
+socialblade}
+\APACinsertmetastar {%
+socialblade}%
+\begin{APACrefauthors}%
+SocialBladeLLC.%
+\end{APACrefauthors}%
+\unskip\
+\newblock
+\APACrefYearMonthDay{2019}{}{}.
+\newblock
+\APACrefbtitle {Youtube social blade stats.} {Youtube social blade stats.}
+\newblock
+\begin{APACrefURL} [{2019-01-5}]\url{https://socialblade.com/youtube/}
+  \end{APACrefURL}
+\PrintBackRefs{\CurrentBib}
+
+\bibitem [\protect \citeauthoryear {%
+Welbourne%
+\ \BBA {} Grant%
+}{%
+Welbourne%
+\ \BBA {} Grant%
+}{%
+{\protect \APACyear {2016}}%
+}]{%
+welbourne2016science}
+\APACinsertmetastar {%
+welbourne2016science}%
+\begin{APACrefauthors}%
+Welbourne, D\BPBI J.%
+\BCBT {}\ \BBA {} Grant, W\BPBI J.%
+\end{APACrefauthors}%
+\unskip\
+\newblock
+\APACrefYearMonthDay{2016}{}{}.
+\newblock
+{\BBOQ}\APACrefatitle {Science communication on YouTube: Factors that affect
+  channel and video popularity} {Science communication on youtube: Factors that
+  affect channel and video popularity}.{\BBCQ}
+\newblock
+\APACjournalVolNumPages{Public Understanding of Science}{25}{6}{706--718}.
+\PrintBackRefs{\CurrentBib}
+
+\end{thebibliography}
