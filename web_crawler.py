@@ -151,9 +151,9 @@ class Worker:
         # URL passed all checks. We can store it as visited.
         visited_dict[url] = True
 
-        self.fetch_url(url)
+        self.fetch_url(url, robot_parser)
 
-    def fetch_url(self, url: str):
+    def fetch_url(self, url: str, robots: robotparser.RobotFileParser):
 
         try:
             response = self.get_response(url)  # this can raise exception
@@ -178,7 +178,7 @@ class Worker:
                 # open with selenium to render all the javascript
                 self.driver.get(url)
                 # TODO check if page is similar to some other one with the hash crap
-                self.parse_page_content()
+                self.parse_page_content(url, robots)
 
         except requests.exceptions.RequestException as err:
             # TODO: HANDLE THIS PROPERLY
@@ -187,12 +187,7 @@ class Worker:
             #       (Caused by SSLError(SSLError(1, '[SSL: SSLV3_ALERT_HANDSHAKE_FAILURE] sslv3 alert handshake failure (_ssl.c:1051)')))
             print("Error at {}".format(url), err)
 
-    def parse_page_content(self):
-
-        # TODO: I did not touch this function at all. Sorry :( its 00:15
-        # Parse all links and put them in the frontier after checking they're '.gov.si'
-        # print("Did receive " + str(self.current_page))
-
+    def parse_page_content(self, url: str, robots: robotparser.RobotFileParser):
         document = self.driver.page_source
         hashed = hash_document(document)
         if hashed in documents_dict:
@@ -201,40 +196,34 @@ class Worker:
         else:
             documents_dict[hashed] = True  # TODO: - What value here??
 
-
         soup = BeautifulSoup(document, 'html.parser')
         hrefs = [a.get("href") for a in soup.find_all(href=True) if self.is_valid_url(a.get("href"))]
-
-
         print("Received " + str(len(hrefs)) + " potential new urls")
 
         added = 0
         for href in hrefs:
             canonical = str(self.to_canonical_form(href))
-            if not self.is_government_url(canonical) or self.is_already_visited(
-                canonical
-            ):
+            if not self.is_government_url(canonical) or self.is_already_visited(canonical):
                 continue
             frontier.put(canonical)
             added += 1
         print("Added " + str(added) + " new urls from hrefs")
 
-
-        # Handling JS onclick
-        # TODO Needs field testing
-        all_tags = soup.find_all()
-        clickables = [
-            str(a.get("onclick")).split("=")[-1].replace('"', '').replace("'", "")
-            for a in all_tags
-            if"onclick" in str(a)
-        ]
-        added = 0
-        for c in clickables:
-            nurl = str(self.to_canonical(self.current_page)) + c
-            if self.is_valid_url(nurl) and self.is_allowed_by_robots(nurl):
-                frontier.put(self.to_canonical(nurl))
-                added+=1
-        print("Added " + str(added) + " new urls from js click")
+        # # Handling JS onclick
+        # # TODO Needs field testing
+        # all_tags = soup.find_all()
+        # clickables = [
+        #     str(a.get("onclick")).split("=")[-1].replace('"', '').replace("'", "")
+        #     for a in all_tags
+        #     if "onclick" in str(a)
+        # ]
+        # added = 0
+        # for c in clickables:
+        #     nurl = url + c
+        #     if self.is_valid_url(nurl) and self.is_allowed_by_robots(nurl, robots):
+        #         frontier.put(self.to_canonical(nurl))
+        #         added += 1
+        # print("Added " + str(added) + " new urls from js click")
 
         # Image collection
         # TODO Needs field testing
@@ -245,12 +234,11 @@ class Worker:
             if self.is_valid_url(imgs):
                 image_sources.append(imgs)
                 added += 1
-            elif self.is_valid_url(str(self.to_canonical(self.current_page))+imgs):
+            elif self.is_valid_url(url + imgs):
                 image_sources.append(imgs)
                 added += 1
             else:
                 print("Could not parse image link "+imgs)
-
 
         print("Added " + str(added) + " new images to list")
 
