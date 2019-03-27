@@ -1,6 +1,7 @@
 # https://github.com/stchris/untangle
 import untangle
 
+
 def parse_xml(xml: str):
     tree = untangle.parse(xml)
     urlset = tree.urlset
