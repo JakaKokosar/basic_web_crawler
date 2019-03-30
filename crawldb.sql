@@ -1,4 +1,15 @@
+
+DROP TABLE IF EXISTS crawldb.link;
+DROP TABLE IF EXISTS crawldb.page_data;
+DROP TABLE IF EXISTS crawldb.image;
+DROP TABLE IF EXISTS crawldb.page;
+DROP TABLE IF EXISTS crawldb.data_type;
+DROP TABLE IF EXISTS crawldb.site;
+DROP TABLE IF EXISTS crawldb.page_type;
+
+
 CREATE SCHEMA IF NOT EXISTS crawldb;
+
 
 CREATE TABLE crawldb.data_type ( 
 	code                 varchar(20)  NOT NULL,
@@ -93,4 +104,5 @@ INSERT INTO crawldb.page_type VALUES
 	('HTML'),
 	('BINARY'),
 	('DUPLICATE'),
-	('FRONTIER');
+	('FRONTIER'),
+	('UNKNOWN');
