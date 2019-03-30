@@ -64,6 +64,10 @@ class DBApi:
         sql = "INSERT INTO crawldb.image (page_id, filename, content_type, data, accessed_time) VALUES (%s, %s, %s, %s, %s) RETURNING ID"
         return self._execute_one(sql, (page_id, filename, content_type, data, accessed_time))
 
+    def remove_page(self, url, time):
+        page_id = self.page_for_url(url)
+        self.update_page(page_id, "UNKNOWN", None, 500, time)
+
     # save `link`
     def insert_link(self, page_id_from, page_id_to):
         sql = "INSERT INTO crawldb.link (from_page, to_page) VALUES (%s, %s)"

@@ -187,22 +187,33 @@ class Worker:
                 # open with selenium to render all the javascript
                 try:
                     self.driver.get(url)
+                    print("Did receive HTML content from: " + str(url))
                     self.parse_page_content(site_id, url, status_code, datetime.datetime.now(), robots)
                 except Exception as e:
-                    print("An error occured while parsing page content: " + str(e))
-                    self.conn.insert_page(site_id, "HTML", url, None, 500, datetime.datetime.now())
-                    # TODO: - should update
-
+                    print("An error occured while parsing page content: " + str(e) + " from url " + str(url))
+                    page_id = self.conn.page_id_for_page_in_frontier(site_id, url)
+                    if page_id:
+                        self.conn.update_page(page_id, "HTML", None, 500, datetime.datetime.now())
+                    else:
+                        self.conn.insert_page(site_id, "HTML", url, None, 500, datetime.datetime.now())
+            else:
+                print("Content at " + str(url) + " is of unknown content-type. Removing from frontier ...")
+                self.conn.remove_page(url, datetime.datetime.now())
         except Exception as err:
             print("Error at {}".format(url), err)
-            page_id = self.conn.insert_page(site_id, "HTML", url, None, 404, datetime.datetime.now())
-            # TODO: - should update
+            page_id = self.conn.page_id_for_page_in_frontier(site_id, url)
+            if page_id:
+                self.conn.update_page(page_id, "HTML", None, 404, datetime.datetime.now())
+            else:
+                self.conn.insert_page(site_id, "HTML", url, None, 404, datetime.datetime.now())
 
     def parse_page_content(self, site_id: int, url: str, status_code, accessed_time, robots: robotparser.RobotFileParser):
         document = self.driver.page_source
         hashed = hash_document(document)
 
-        existing_page_id = self.conn.page_id_for_page_in_frontier(site_id, url)
+        existing_page_id = self.conn.page_for_url(url)
+        if url == "http://www.gov.si/":
+            print()
 
         try:
           if hashed in documents_dict:
@@ -288,6 +299,8 @@ class Worker:
         print("Added " + str(added) + " new images to list")
 
     def save_file(self, url: str, response):
+        page_id = self.conn.page_for_url(url)
+
         data_type_code = [
             extension
             for extension in supported_files
@@ -296,12 +309,11 @@ class Worker:
         if not data_type_code:
             # something went wrong! abort ..
             print("Error storing file from %s! Invalid Content-Type: %s" % (url, response.headers["Content-Type"]))
+            self.conn.update_page(page_id, "BINARY", None, 500, datetime.datetime.now())
             return
 
-        page_id = self.conn.page_for_url(url)
         self.conn.insert_page_data(page_id, data_type_code[0].upper(), response.content)
-
-        # TODO: - update `FRONTIER` to `BINARY`
+        self.conn.update_page(page_id, "BINARY", None, 200, datetime.datetime.now())
 
     def save_image(self, url: str, response):
         page_id = self.conn.page_for_url(url)
