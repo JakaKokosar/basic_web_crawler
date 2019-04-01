@@ -338,25 +338,28 @@ class Worker:
         self.conn.update_page(page_id, "BINARY", None, 200, datetime.datetime.now(), is_binary=True)
 
     def dequeue_url(self):
-        # Fetch URLs from Frontier.
         retry_count = 50
         while True:
-            if retry_count == 0:
-                print("Finished crawling")
-                return
+            try:
+                # Fetch URLs from Frontier.
+                if retry_count == 0:
+                    print("Finished crawling")
+                    return
 
-            result = self.conn.select_from_frontier()
-            if not result:
-                time.sleep(10)
-                retry_count -= 1
+                result = self.conn.select_from_frontier()
+                if not result:
+                    time.sleep(10)
+                    retry_count -= 1
+                    continue
+                retry_count = 50
+                id, url, is_binary = result
+                self.conn.update_page(id, "IN PROGRESS", None, None, None)
+
+                # print(os.getpid(), "got", url, 'is empty:', frontier.empty())
+                self.parse_url(url, is_binary)
+                print('Dequed: ', url)
+            except:
                 continue
-            retry_count = 50
-            id, url, is_binary = result
-            self.conn.update_page(id, "IN PROGRESS", None, None, None)
-
-            # print(os.getpid(), "got", url, 'is empty:', frontier.empty())
-            self.parse_url(url, is_binary)
-            print('Dequed: ', url)
 
     @staticmethod
     def get_response(url: str):
