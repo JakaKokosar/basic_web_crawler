@@ -171,6 +171,13 @@ class Worker:
             site_id = self.conn.site_id_for_domain(self.get_domain_from_url(url))
             robot_parser = None
 
+        default_crawl_delay = 4
+        if robot_parser is not None:
+            crawl_delay = robot_parser.crawl_delay('*')
+            if crawl_delay is not None:
+                default_crawl_delay = int(crawl_delay)
+        time.sleep(default_crawl_delay)
+
         # URL passed all checks. We can store it as visited.
         visited_dict[url] = True
 
@@ -345,9 +352,6 @@ class Worker:
             # print(os.getpid(), "got", url, 'is empty:', frontier.empty())
             self.parse_url(url, is_image_url)
             print('Dequed: ', url)
-
-            # This is default delay
-            time.sleep(4)
 
     @staticmethod
     def get_response(url: str):
