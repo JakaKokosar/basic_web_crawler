@@ -25,9 +25,6 @@ from utils import DBConn, DBApi
 from hashing import *
 
 manager = multiprocessing.Manager()
-frontier = multiprocessing.Queue()
-frontier_dict = manager.dict()
-visited_dict = manager.dict()
 site_domains = manager.dict()
 documents_dict = manager.dict()
 
@@ -61,7 +58,7 @@ class Worker:
         self.root_name = ""
         self.current_page = ""
 
-    def __get_chrome_driver(self):
+    def get_chrome_driver(self):
         # TODO - Pretend to be a browser
         chrome_options = Options()
         chrome_options.add_argument("--headless")
@@ -87,10 +84,8 @@ class Worker:
     def is_valid_url(self, url: str):
         return validators.url(url)
 
-    def add_to_frontier(self, url, site_id, image=False):
-        frontier.put((url, image))
-        frontier_dict[url] = True
-        page_id = self.conn.insert_page(site_id, "FRONTIER", url, None, None, None)
+    def add_to_frontier(self, url, site_id, is_binary=False):
+        page_id = self.conn.insert_page(site_id, "FRONTIER", url, None, None, None, is_binary=is_binary)
         return page_id
 
     @property
@@ -143,7 +138,7 @@ class Worker:
                 sitemap_urls = sitemap.parse_xml(req.text)
                 sitemaps_content += req.text + "\n"
                 for url in sitemap_urls:
-                    if not self.is_government_url(url) or self.is_already_visited(url) or url in frontier_dict.keys():
+                    if not self.is_government_url(url) or self.is_already_visited(url):
                         continue
                     urls_to_add.append(url)
 
@@ -156,28 +151,21 @@ class Worker:
 
             return site_id, robot_file_parser
 
-    def parse_url(self, url: str, is_image_url: bool):
+    def parse_url(self, url: str, is_binary: bool):
         # unify url representation
         url = str(self.to_canonical_form(url))
 
-        if url in frontier_dict.keys() or url in visited_dict.keys():
-            # TODO: this should not happen, but it does :S
-            return
-
-        if not is_image_url:
-            # get robot parser object for current site domain.
-            site_id, robot_parser = self.parse_robots(url)
-        else:
+        if is_binary:
             site_id = self.conn.site_id_for_domain(self.get_domain_from_url(url))
             robot_parser = None
-
-        # URL passed all checks. We can store it as visited.
-        visited_dict[url] = True
+        else:
+            # get robot parser object for current site domain.
+            site_id, robot_parser = self.parse_robots(url)
 
         # fetch url
-        self.fetch_url(url, site_id, is_image_url, robot_parser)
+        self.fetch_url(url, site_id, is_binary, robot_parser)
 
-    def fetch_url(self, url: str, site_id: int, is_image_url, robots: robotparser.RobotFileParser):
+    def fetch_url(self, url: str, site_id: int, is_binary, robots: robotparser.RobotFileParser):
         try:
             response = self.get_response(url)  # this can raise exception
             status_code = response.status_code
@@ -189,7 +177,7 @@ class Worker:
                 "/vnd.openxmlformats-officedocument.presentationml.presentation" in response.headers["Content-Type"]:
 
                 self.save_file(url, response)
-            elif is_image_url or "image" in response.headers["Content-Type"]:
+            elif is_binary or "image" in response.headers["Content-Type"]:
                 self.save_image(url, response)
             elif "text/html" in response.headers["Content-Type"]:
                 # open with selenium to render all the javascript
@@ -226,10 +214,10 @@ class Worker:
         try:
           if hashed in documents_dict:
               if existing_page_id:
-                  self.conn.update_page(existing_page_id, "DUPLICATE", None, status_code, accessed_time)
+                  self.conn.update_page(existing_page_id, "DUPLICATE", None, status_code, accessed_time, duplicate_page_id=existing_page_id)
                   print("Updated page to `DUPLICATE` with id " + str(existing_page_id) + " at url: " + url)
               else:
-                  page_id = self.conn.insert_page(site_id, "DUPLICATE", url, None, status_code, accessed_time)
+                  page_id = self.conn.insert_page(site_id, "DUPLICATE", url, None, status_code, accessed_time, duplicate_page_id=existing_page_id)
                   print("Added `DUPLICATE` page with id " + str(page_id) + " at url: " + url)
               return
           else:
@@ -260,7 +248,7 @@ class Worker:
 
         added = 0
         for href in hrefs:
-            if not self.is_government_url(href) or self.is_already_visited(href) or href in frontier_dict.keys():
+            if not self.is_government_url(href) or self.is_already_visited(href):
                 continue
             # print("Added " + href + " to `FRONTIER` page with id " + str(page_id))
             page_id = self.add_to_frontier(href, site_id)
@@ -294,13 +282,13 @@ class Worker:
             if self.is_valid_url(img):
                 image_sources.append(img)
                 added += 1
-                if self.is_already_visited(img) or img in frontier_dict.keys():
+                if self.is_already_visited(img):
                     continue
                 self.add_to_frontier(img, site_id, True)
             elif self.is_valid_url(url + img):
                 image_sources.append(img)
                 added += 1
-                if self.is_already_visited(img) or img in frontier_dict.keys():
+                if self.is_already_visited(img):
                     continue
                 self.add_to_frontier(img, site_id, True)
 
@@ -317,7 +305,7 @@ class Worker:
         if not data_type_code:
             # something went wrong! abort ..
             print("Error storing file from %s! Invalid Content-Type: %s" % (url, response.headers["Content-Type"]))
-            self.conn.update_page(page_id, "BINARY", None, 500, datetime.datetime.now())
+            self.conn.update_page(page_id, "BINARY", None, 500, datetime.datetime.now(), is_binary=True)
             return
 
         self.conn.insert_page_data(page_id, data_type_code[0].upper(), response.content)
@@ -331,19 +319,19 @@ class Worker:
                                response.headers["Content-Type"],
                                response.content,
                                datetime.datetime.now())
-        self.conn.update_page(page_id, "BINARY", None, 200, datetime.datetime.now())
+        self.conn.update_page(page_id, "BINARY", None, 200, datetime.datetime.now(), is_binary=True)
 
     def dequeue_url(self):
         # Fetch URLs from Frontier.
         while True:
             try:
-                url, is_image_url = frontier.get(True, timeout=300)
-                del frontier_dict[url]
+                id, url, is_binary = self.conn.select_from_frontier()
+                self.conn.update_page(id, "IN PROGRESS", None, None, None)
             except Empty:
                 return "Process {} stopped. No new URLs in Frontier\n".format(os.getpid())
 
             # print(os.getpid(), "got", url, 'is empty:', frontier.empty())
-            self.parse_url(url, is_image_url)
+            self.parse_url(url, is_binary)
             print('Dequed: ', url)
 
             # This is default delay
@@ -365,9 +353,9 @@ class Worker:
     def is_government_url(url: str):
         return ".gov.si" in url
 
-    @staticmethod
-    def is_already_visited(url: str):
-        return url in visited_dict.keys()
+    def is_already_visited(self, url: str):
+        page_id = self.conn.page_for_url(url)
+        return page_id
 
     @staticmethod
     def is_allowed_by_robots(url: str, robot: robotparser.RobotFileParser):
@@ -395,7 +383,7 @@ class Worker:
         # self.db_connection = db_connect()
         # print(self.db_connection)
         #
-        self.__get_chrome_driver()
+        self.get_chrome_driver()
         #
         # # TODO: gracefully close connection,
         # #       when process is finished.
@@ -413,24 +401,25 @@ DEFAULT_CONCURRENT_WORKERS = 4
 
 if __name__ == "__main__":
     sites = [
-        "http://www.e-prostor.gov.si/fileadmin/etn/Porocila/Polletno_porocilo_za_2010.pdf"
-        # "http://evem.gov.si/",
-        # "https://e-uprava.gov.si/",
-        # "https://podatki.gov.si/",
-        # "http://www.e-prostor.gov.si/",
-        # # additional
-        # 'http://www.gov.si/',
-        # 'http://prostor3.gov.si/preg/',
-        # 'https://egp.gu.gov.si/egp/',
-        # 'http://www.gu.gov.si/',
-        # 'https://gis.gov.si/ezkn/'
+        "http://evem.gov.si/",
+        "https://e-uprava.gov.si/",
+        "https://podatki.gov.si/",
+        "http://www.e-prostor.gov.si/",
+        # additional
+        'http://www.gov.si/',
+        'http://prostor3.gov.si/preg/',
+        'https://egp.gu.gov.si/egp/',
+        'http://www.gu.gov.si/',
+        'https://gis.gov.si/ezkn/'
     ]
-    for site in sites:
-        frontier.put((site, False))
-        frontier_dict[site] = True
 
     workers = int(sys.argv[1]) if len(sys.argv) >= 2 else DEFAULT_CONCURRENT_WORKERS
     connections = {id: DBApi(DBConn()) for id in range(workers)}
+
+    # worker = Worker(0)
+    # for url in sites:
+    #     worker.get_chrome_driver()
+    #     worker.parse_url(url, False)
 
     # conn: DBApi = connections[0]
     # pages = conn.select_all_pages()
