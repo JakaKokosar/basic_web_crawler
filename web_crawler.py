@@ -194,7 +194,7 @@ class Worker:
             elif "text/html" in response.headers["Content-Type"]:
                 # open with selenium to render all the javascript
                 try:
-                    self.driver.get(url, timeout=10)
+                    self.driver.get(url)
                     print("Did receive HTML content from: " + str(url))
                     self.parse_page_content(site_id, url, status_code, datetime.datetime.now(), robots)
                 except Exception as e:
