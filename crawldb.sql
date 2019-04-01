@@ -1,4 +1,15 @@
+
+DROP TABLE IF EXISTS crawldb.link;
+DROP TABLE IF EXISTS crawldb.page_data;
+DROP TABLE IF EXISTS crawldb.image;
+DROP TABLE IF EXISTS crawldb.page;
+DROP TABLE IF EXISTS crawldb.data_type;
+DROP TABLE IF EXISTS crawldb.site;
+DROP TABLE IF EXISTS crawldb.page_type;
+
+
 CREATE SCHEMA IF NOT EXISTS crawldb;
+
 
 CREATE TABLE crawldb.data_type ( 
 	code                 varchar(20)  NOT NULL,
@@ -26,6 +37,9 @@ CREATE TABLE crawldb.page (
 	html_content         text  ,
 	http_status_code     integer  ,
 	accessed_time        timestamp  ,
+	duplicate_page_id    integer,
+	is_binary            boolean,
+	hash								 bigint,
 	CONSTRAINT pk_page_id PRIMARY KEY ( id ),
 	CONSTRAINT unq_url_idx UNIQUE ( url ) 
  );
@@ -93,4 +107,6 @@ INSERT INTO crawldb.page_type VALUES
 	('HTML'),
 	('BINARY'),
 	('DUPLICATE'),
-	('FRONTIER');
+	('FRONTIER'),
+	('IN PROGRESS'),
+	('UNKNOWN');
