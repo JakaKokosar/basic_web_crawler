@@ -7,29 +7,21 @@ import datetime
 from urllib.parse import urlparse
 
 import requests
-import multiprocessing
 import urllib3
 import urlcanon
 import validators
 
-from queue import Empty
-
 from selenium import webdriver
 from bs4 import BeautifulSoup
 from selenium.webdriver.chrome.options import Options
-from concurrent.futures import ProcessPoolExecutor, Future, ALL_COMPLETED, wait
+from concurrent.futures import ThreadPoolExecutor, Future, ALL_COMPLETED, wait
 from urllib import robotparser, request, parse
 
 import sitemap
 from utils import DBConn, DBApi
 from hashing import *
 
-manager = multiprocessing.Manager()
-site_domains = manager.dict()
-
-
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
 
 download_dir = "data/"
 supported_files = ["pdf", "doc", "docx", "ppt", "pptx"]
@@ -89,16 +81,19 @@ class Worker:
         """  Standard robot parser
         """
         site_domain = self.get_domain_from_url(url)
+        robots_content = self.conn.select_robots_by_domain(site_domain)
+
+        robots_location = "http://" + site_domain + "/robots.txt"
+        robots_parser = robotparser.RobotFileParser()
+        robots_parser.set_url(robots_location)
+
         # site_id = self.conn.site_id_for_domain(site_domain)
-        if site_domain in site_domains.keys():
+        if robots_content:
             # we have already saw this site
             site_id = self.conn.site_id_for_domain(site_domain)
-            return site_id, site_domains.get(site_domain, None)
+            robots_parser.parse(robots_content)
+            return site_id, robots_parser
         else:
-            # first time we are on this domain, check for robots.txt, parse it, save it!
-            robots_location = "http://" + site_domain + "/robots.txt"
-            robot_file_parser = robotparser.RobotFileParser()
-            robot_file_parser.set_url(robots_location)
             try:
                 response = requests.get(robots_location, timeout=10)
                 response.raise_for_status()
@@ -106,18 +101,11 @@ class Worker:
             except requests.exceptions.RequestException as err:
                 # This is a general request exception. Should we care about if something went wrong?
                 # For now we assume that robots.txt in unavailable or is not present at all.
-                # TODO: this should be logs not prints.
-                print(
-                    "Unexpected error when requesting robots.txt for {}".format(url),
-                    err,
-                )
-                # need to store some value so we know that we already examined this domain
-                site_domains[site_domain] = None
+                print("Unexpected error when requesting robots.txt for {}".format(url), err)
                 site_id = self.conn.insert_site(site_domain, "/", "/")
                 return site_id, None
 
-            robot_file_parser.parse(robots_content)
-            site_domains[site_domain] = robot_file_parser
+            robots_parser.parse(robots_content)
 
             # Sitemap parsing
             sitemaps = [line for line in robots_content if "Sitemap" in line]
@@ -143,7 +131,7 @@ class Worker:
 
             print("Added %d urls from sitemap!" % len(urls_to_add))
 
-            return site_id, robot_file_parser
+            return site_id, robots_parser
 
     def parse_url(self, url: str, is_binary: bool):
         # unify url representation
@@ -453,7 +441,7 @@ if __name__ == "__main__":
     #     else:
     #         visited_dict[page[3]] = True
 
-    with ProcessPoolExecutor(max_workers=workers) as executor:
+    with ThreadPoolExecutor(max_workers=workers) as executor:
 
         def submit_worker(_f):
             _future = executor.submit(_f)

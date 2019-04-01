@@ -118,6 +118,14 @@ class DBApi:
         result = cursor.fetchone()
         return result
 
+    def select_robots_by_domain(self, domain):
+        sql = "SELECT robots_content FROM crawldb.site WHERE domain=%s"
+        cursor = self.conn.cursor
+        cursor.execute(sql, (domain, ))
+        self.conn.commit()
+        result = cursor.fetchone()
+        return result
+
     # find `site` with `domain`
     def site_id_for_domain(self, domain):
         sql = "SELECT * FROM crawldb.site WHERE domain = %s"
