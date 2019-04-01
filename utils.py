@@ -40,19 +40,19 @@ class DBApi:
         return self._execute_one(sql, (domain, robots_content, sitemap_content))
 
     # save `page` linked to specific `site` and return ID
-    def insert_page(self, site_id, page_type_code, url, html_content, http_status_code, accessed_time, duplicate_page_id=-1, is_binary=False):
+    def insert_page(self, site_id, page_type_code, url, html_content, http_status_code, accessed_time, hash=-1, duplicate_page_id=-1, is_binary=False):
         try:
-            sql = "INSERT INTO crawldb.page (site_id, page_type_code, url, html_content, http_status_code, accessed_time, duplicate_page_id, is_binary) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING ID"
-            return self._execute_one(sql, (site_id, page_type_code, url, html_content, http_status_code, accessed_time, duplicate_page_id, is_binary))
+            sql = "INSERT INTO crawldb.page (site_id, page_type_code, url, html_content, http_status_code, accessed_time, duplicate_page_id, is_binary, hash) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING ID"
+            return self._execute_one(sql, (site_id, page_type_code, url, html_content, http_status_code, accessed_time, duplicate_page_id, is_binary, hash))
         except Exception as e:
             self.conn.connection.rollback()
             # TODO: - DUPLICATES SHOULDN'T COME THROUGH, BUT THEY DO :S
             return None
 
     # update existing page
-    def update_page(self, page_id, page_type_code, html_content, http_status_code, accessed_time, duplicate_page_id=-1, is_binary=False):
-        sql = "UPDATE crawldb.page set page_type_code = %s, html_content = %s, http_status_code = %s, accessed_time = %s, duplicate_page_id = %s, is_binary = %s WHERE id = %s;"
-        self.conn.cursor.execute(sql, (page_type_code, html_content, http_status_code, accessed_time, duplicate_page_id, is_binary, page_id))
+    def update_page(self, page_id, page_type_code, html_content, http_status_code, accessed_time, duplicate_page_id=-1, hash=-1, is_binary=False):
+        sql = "UPDATE crawldb.page set page_type_code = %s, html_content = %s, http_status_code = %s, accessed_time = %s, duplicate_page_id = %s, hash=%s, is_binary = %s WHERE id = %s;"
+        self.conn.cursor.execute(sql, (page_type_code, html_content, http_status_code, accessed_time, duplicate_page_id, hash, is_binary, page_id))
 
     # save `page_data` linked to specific `page` and return ID
     def insert_page_data(self, page_id, data_type_code, data):
@@ -97,6 +97,10 @@ class DBApi:
     def select_all_pages(self):
         sql = "SELECT * FROM crawldb.page"
         return self._execute_all(sql, ())
+
+    def page_for_hash(self, hash):
+        sql = "SELECT id FROM crawldb.page WHERE hash=%s"
+        return self._execute_one(sql, (hash, ))
 
     def select_page_html(self, url):
         sql = "SELECT id FROM crawldb.page WHERE page_type_code='HTML' ORDER BY accessed_time"

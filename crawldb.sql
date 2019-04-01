@@ -39,6 +39,7 @@ CREATE TABLE crawldb.page (
 	accessed_time        timestamp  ,
 	duplicate_page_id    integer,
 	is_binary            boolean,
+	hash								 bigint,
 	CONSTRAINT pk_page_id PRIMARY KEY ( id ),
 	CONSTRAINT unq_url_idx UNIQUE ( url ) 
  );

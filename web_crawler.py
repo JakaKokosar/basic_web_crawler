@@ -26,7 +26,6 @@ from hashing import *
 
 manager = multiprocessing.Manager()
 site_domains = manager.dict()
-documents_dict = manager.dict()
 
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -216,29 +215,27 @@ class Worker:
         existing_page_id = self.conn.page_for_url(url)
 
         try:
-          if hashed in documents_dict:
-              duplicate_id = self.conn.select_page_html(url)
-              if existing_page_id:
-                  self.conn.update_page(existing_page_id, "DUPLICATE", None, status_code, accessed_time, duplicate_page_id=duplicate_id)
-                  print("Updated page to `DUPLICATE` with id " + str(existing_page_id) + " at url: " + url)
-              else:
-                  page_id = self.conn.insert_page(site_id, "DUPLICATE", url, None, status_code, accessed_time, duplicate_page_id=duplicate_id)
-                  print("Added `DUPLICATE` page with id " + str(page_id) + " at url: " + url)
-              return
-          else:
-              documents_dict[hashed] = True
-
-              if existing_page_id:
-                  self.conn.update_page(existing_page_id, "HTML", document, status_code, accessed_time)
-                  print("Updated page to `HTML` with id " + str(existing_page_id) + " at url: " + url)
-              else:
-                  existing_page_id = self.conn.insert_page(site_id, "HTML", url, document, status_code, accessed_time)
-                  if not existing_page_id:
-                      return
-                  print("Added `HTML` page with id " + str(existing_page_id) + " at url: " + url)
+            duplicate_id = self.conn.page_for_hash(hashed)
+            if duplicate_id:
+                if existing_page_id:
+                    self.conn.update_page(existing_page_id, "DUPLICATE", None, status_code, accessed_time, duplicate_page_id=duplicate_id)
+                    print("Updated page to `DUPLICATE` with id " + str(existing_page_id) + " at url: " + url)
+                else:
+                    page_id = self.conn.insert_page(site_id, "DUPLICATE", url, None, status_code, accessed_time, duplicate_page_id=duplicate_id)
+                    print("Added `DUPLICATE` page with id " + str(page_id) + " at url: " + url)
+                return
+            else:
+                if existing_page_id:
+                    self.conn.update_page(existing_page_id, "HTML", document, status_code, accessed_time, hash=hashed)
+                    print("Updated page to `HTML` with id " + str(existing_page_id) + " at url: " + url)
+                else:
+                    existing_page_id = self.conn.insert_page(site_id, "HTML", url, document, status_code, accessed_time, hash=hashed)
+                    if not existing_page_id:
+                        return
+                    print("Added `HTML` page with id " + str(existing_page_id) + " at url: " + url)
         except Exception as e:
-          print(e)
-          return
+            print(e)
+            return
 
         if not existing_page_id:
             print()
