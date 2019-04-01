@@ -44,12 +44,6 @@ connections = None
 
 class Worker:
     """ Base class for web crawler.
-
-    TODO: - HTTP downloader and renderer: To retrieve and render a web page.
-          - Data extractor: Links extracting done 70% done. Need images.
-          - Duplicate detector: Basic done. Need advanced based on content.
-          - Datastore: To store the data and additional metadata used by the crawler.
-
     """
 
     def __init__(self, id):
@@ -224,11 +218,12 @@ class Worker:
 
         try:
           if hashed in documents_dict:
+              duplicate_id = self.conn.select_page_html(url)
               if existing_page_id:
-                  self.conn.update_page(existing_page_id, "DUPLICATE", None, status_code, accessed_time, duplicate_page_id=existing_page_id)
+                  self.conn.update_page(existing_page_id, "DUPLICATE", None, status_code, accessed_time, duplicate_page_id=duplicate_id)
                   print("Updated page to `DUPLICATE` with id " + str(existing_page_id) + " at url: " + url)
               else:
-                  page_id = self.conn.insert_page(site_id, "DUPLICATE", url, None, status_code, accessed_time, duplicate_page_id=existing_page_id)
+                  page_id = self.conn.insert_page(site_id, "DUPLICATE", url, None, status_code, accessed_time, duplicate_page_id=duplicate_id)
                   print("Added `DUPLICATE` page with id " + str(page_id) + " at url: " + url)
               return
           else:

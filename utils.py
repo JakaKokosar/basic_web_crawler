@@ -70,6 +70,8 @@ class DBApi:
 
     # save `link`
     def insert_link(self, page_id_from, page_id_to):
+        if not page_id_from or not page_id_to:
+            return
         sql = "INSERT INTO crawldb.link (from_page, to_page) VALUES (%s, %s)"
         return self.conn.cursor.execute(sql, (page_id_from, page_id_to))
 
@@ -95,6 +97,14 @@ class DBApi:
     def select_all_pages(self):
         sql = "SELECT * FROM crawldb.page"
         return self._execute_all(sql, ())
+
+    def select_page_html(self, url):
+        sql = "SELECT id FROM crawldb.page WHERE page_type_code='HTML' ORDER BY accessed_time"
+        cursor = self.conn.cursor
+        cursor.execute(sql, ())
+        self.conn.commit()
+        result = cursor.fetchone()
+        return result
 
     def select_from_frontier(self):
         sql = "SELECT id, url, is_binary FROM crawldb.page WHERE page_type_code='FRONTIER' ORDER BY accessed_time"
