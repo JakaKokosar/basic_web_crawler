@@ -96,7 +96,8 @@ class Worker:
         """  Standard robot parser
         """
         site_domain = self.get_domain_from_url(url)
-        if site_domain in site_domains:
+        # site_id = self.conn.site_id_for_domain(site_domain)
+        if site_domain in site_domains.keys():
             # we have already saw this site
             site_id = self.conn.site_id_for_domain(site_domain)
             return site_id, site_domains.get(site_domain, None)
@@ -118,7 +119,7 @@ class Worker:
                     err,
                 )
                 # need to store some value so we know that we already examined this domain
-                site_domains[site_domain] = "not present" # need to store something
+                site_domains[site_domain] = None
                 site_id = self.conn.insert_site(site_domain, "/", "/")
                 return site_id, None
 
@@ -161,6 +162,16 @@ class Worker:
         else:
             # get robot parser object for current site domain.
             site_id, robot_parser = self.parse_robots(url)
+
+        default_crawl_delay = 4
+        try:
+            if not robot_parser is None:
+                crawl_delay = robot_parser.crawl_delay('*')
+                if not crawl_delay is None:
+                    default_crawl_delay = int(crawl_delay)
+        except AttributeError:
+            pass
+        time.sleep(default_crawl_delay)
 
         # fetch url
         self.fetch_url(url, site_id, is_binary, robot_parser)
@@ -300,7 +311,7 @@ class Worker:
         data_type_code = [
             extension
             for extension in supported_files
-            if extension in response.headers["Content-Type"]
+            if extension in url
         ]
         if not data_type_code:
             # something went wrong! abort ..
@@ -333,9 +344,6 @@ class Worker:
             # print(os.getpid(), "got", url, 'is empty:', frontier.empty())
             self.parse_url(url, is_binary)
             print('Dequed: ', url)
-
-            # This is default delay
-            time.sleep(4)
 
     @staticmethod
     def get_response(url: str):
@@ -415,6 +423,8 @@ if __name__ == "__main__":
 
     workers = int(sys.argv[1]) if len(sys.argv) >= 2 else DEFAULT_CONCURRENT_WORKERS
     connections = {id: DBApi(DBConn()) for id in range(workers)}
+
+    DBApi(DBConn()).in_progress_to_frontier()
 
     # worker = Worker(0)
     # for url in sites:

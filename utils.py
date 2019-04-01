@@ -73,7 +73,23 @@ class DBApi:
         sql = "INSERT INTO crawldb.link (from_page, to_page) VALUES (%s, %s)"
         return self.conn.cursor.execute(sql, (page_id_from, page_id_to))
 
+    # all pages that are `in progress`
+    def in_progress_to_frontier(self):
+        sql = "UPDATE crawldb.page SET page_type_code='FRONTIER' WHERE page_type_code='IN PROGRESS'"
+        cursor = self.conn.cursor
+        cursor.execute(sql, ())
+        self.conn.commit()
+
     # selections ...
+
+    # site by domain
+    def select_site_by_domain(self, domain):
+        sql = "SELECT id FROM crawldb.site WHERE domain=%s"
+        cursor = self.conn.cursor
+        cursor.execute(sql, (domain, ))
+        self.conn.commit()
+        result = cursor.fetchone()
+        return result
 
     # select all from `page`
     def select_all_pages(self):
