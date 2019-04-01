@@ -297,8 +297,6 @@ class Worker:
                     continue
                 self.add_to_frontier(img, site_id, True)
             else:
-                # handling of relative image paths IS BROKEN!!!!!!
-
                 # relative_img_path = url.rsplit('/', 1)[0]
                 if not base_url_for_image is None:
                     img = self.to_canonical_form(os.path.join(base_url_for_image, img))
@@ -341,12 +339,20 @@ class Worker:
 
     def dequeue_url(self):
         # Fetch URLs from Frontier.
+        retry_count = 50
         while True:
-            try:
-                id, url, is_binary = self.conn.select_from_frontier()
-                self.conn.update_page(id, "IN PROGRESS", None, None, None)
-            except Empty:
-                return "Process {} stopped. No new URLs in Frontier\n".format(os.getpid())
+            if retry_count == 0:
+                print("Finished crawling")
+                return
+
+            result = self.conn.select_from_frontier()
+            if not result:
+                time.sleep(10)
+                retry_count -= 1
+                continue
+            retry_count = 50
+            id, url, is_binary = result
+            self.conn.update_page(id, "IN PROGRESS", None, None, None)
 
             # print(os.getpid(), "got", url, 'is empty:', frontier.empty())
             self.parse_url(url, is_binary)
