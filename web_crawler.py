@@ -425,12 +425,13 @@ if __name__ == "__main__":
     workers = int(sys.argv[1]) if len(sys.argv) >= 2 else DEFAULT_CONCURRENT_WORKERS
     connections = {id: DBApi(DBConn()) for id in range(workers)}
 
-    DBApi(DBConn()).in_progress_to_frontier()
-
-    # worker = Worker(0)
-    # for url in sites:
-    #     worker.get_chrome_driver()
-    #     worker.parse_url(url, False)
+    api = DBApi(DBConn())
+    api.in_progress_to_frontier()
+    if not api.select_from_frontier():
+        worker = Worker(0)
+        for url in sites:
+            worker.get_chrome_driver()
+            worker.parse_url(url, False)
 
     # conn: DBApi = connections[0]
     # pages = conn.select_all_pages()
