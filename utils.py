@@ -73,11 +73,6 @@ class DBApi:
         sql = "INSERT INTO crawldb.link (from_page, to_page) VALUES (%s, %s)"
         return self.conn.cursor.execute(sql, (page_id_from, page_id_to))
 
-    # save `data`
-    def insert_page_data(self, page_id, data_type_code, data):
-        sql = "INSERT INTO crawldb.page_data (page_id, data_type_code, data) VALUES (%s, %s, %s)"
-        return self._execute_one(sql, (page_id, data_type_code, data))
-
     # selections ...
 
     # select all from `page`

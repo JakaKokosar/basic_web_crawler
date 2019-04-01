@@ -14,7 +14,6 @@ import validators
 
 from queue import Empty
 
-from psycopg2._psycopg import ProgrammingError
 from selenium import webdriver
 from bs4 import BeautifulSoup
 from selenium.webdriver.chrome.options import Options
@@ -88,8 +87,8 @@ class Worker:
     def is_valid_url(self, url: str):
         return validators.url(url)
 
-    def add_to_frontier(self, url, site_id):
-        frontier.put(url)
+    def add_to_frontier(self, url, site_id, image=False):
+        frontier.put((url, image))
         frontier_dict[url] = True
         page_id = self.conn.insert_page(site_id, "FRONTIER", url, None, None, None)
         return page_id
@@ -157,7 +156,7 @@ class Worker:
 
             return site_id, robot_file_parser
 
-    def parse_url(self, url: str):
+    def parse_url(self, url: str, is_image_url: bool):
         # unify url representation
         url = str(self.to_canonical_form(url))
 
@@ -165,23 +164,32 @@ class Worker:
             # TODO: this should not happen, but it does :S
             return
 
-        # get robot parser object for current site domain.
-        site_id, robot_parser = self.parse_robots(url)
+        if not is_image_url:
+            # get robot parser object for current site domain.
+            site_id, robot_parser = self.parse_robots(url)
+        else:
+            site_id = self.conn.site_id_for_domain(self.get_domain_from_url(url))
+            robot_parser = None
 
         # URL passed all checks. We can store it as visited.
         visited_dict[url] = True
 
         # fetch url
-        self.fetch_url(url, site_id, robot_parser)
+        self.fetch_url(url, site_id, is_image_url, robot_parser)
 
-    def fetch_url(self, url: str, site_id: int, robots: robotparser.RobotFileParser):
+    def fetch_url(self, url: str, site_id: int, is_image_url, robots: robotparser.RobotFileParser):
         try:
             response = self.get_response(url)  # this can raise exception
             status_code = response.status_code
 
-            if self.should_download_and_save_file(url):
+            if self.should_download_and_save_file(url) or \
+                "msword" in response.headers["Content-Type"] or \
+                "powerpoint" in response.headers["Content-Type"] or \
+                "/vnd.openxmlformats-officedocument.wordprocessingml.document" in response.headers["Content-Type"] or \
+                "/vnd.openxmlformats-officedocument.presentationml.presentation" in response.headers["Content-Type"]:
+
                 self.save_file(url, response)
-            elif "image" in response.headers["Content-Type"]:
+            elif is_image_url or "image" in response.headers["Content-Type"]:
                 self.save_image(url, response)
             elif "text/html" in response.headers["Content-Type"]:
                 # open with selenium to render all the javascript
@@ -279,22 +287,22 @@ class Worker:
 
         # Image collection
         # TODO Needs field testing
-        # images = [a.get("src") for a in soup.find_all('img')]
-        # image_sources = []
-        # added = 0
-        # for img in images:
-        #     if self.is_valid_url(img):
-        #         image_sources.append(img)
-        #         added += 1
-        #         if self.is_already_visited(img) or img in frontier_dict.keys():
-        #             continue
-        #         self.add_to_frontier(img, site_id)
-        #     elif self.is_valid_url(url + img):
-        #         image_sources.append(img)
-        #         added += 1
-        #         if self.is_already_visited(img) or img in frontier_dict.keys():
-        #             continue
-        #         self.add_to_frontier(img, site_id)
+        images = [a.get("src") for a in soup.find_all('img')]
+        image_sources = []
+        added = 0
+        for img in images:
+            if self.is_valid_url(img):
+                image_sources.append(img)
+                added += 1
+                if self.is_already_visited(img) or img in frontier_dict.keys():
+                    continue
+                self.add_to_frontier(img, site_id, True)
+            elif self.is_valid_url(url + img):
+                image_sources.append(img)
+                added += 1
+                if self.is_already_visited(img) or img in frontier_dict.keys():
+                    continue
+                self.add_to_frontier(img, site_id, True)
 
         print("Added " + str(added) + " new images to list")
 
@@ -318,21 +326,24 @@ class Worker:
     def save_image(self, url: str, response):
         page_id = self.conn.page_for_url(url)
         file_name = url.split("/")[-1:]
-        self.conn.insert_image(page_id, file_name, response.headers["Content-Type"], response.content, datetime.datetime.now())
-
-        # TODO: - update `FRONTIER` to `BINARY`
+        self.conn.insert_image(page_id,
+                               file_name,
+                               response.headers["Content-Type"],
+                               response.content,
+                               datetime.datetime.now())
+        self.conn.update_page(page_id, "BINARY", None, 200, datetime.datetime.now())
 
     def dequeue_url(self):
         # Fetch URLs from Frontier.
         while True:
             try:
-                url = frontier.get(True, timeout=60)
+                url, is_image_url = frontier.get(True, timeout=300)
                 del frontier_dict[url]
             except Empty:
                 return "Process {} stopped. No new URLs in Frontier\n".format(os.getpid())
 
             # print(os.getpid(), "got", url, 'is empty:', frontier.empty())
-            self.parse_url(url)
+            self.parse_url(url, is_image_url)
             print('Dequed: ', url)
 
             # This is default delay
@@ -402,11 +413,12 @@ DEFAULT_CONCURRENT_WORKERS = 4
 
 if __name__ == "__main__":
     sites = [
-        "http://evem.gov.si/",
+        "http://www.e-prostor.gov.si/fileadmin/etn/Porocila/Polletno_porocilo_za_2010.pdf"
+        # "http://evem.gov.si/",
         # "https://e-uprava.gov.si/",
         # "https://podatki.gov.si/",
         # "http://www.e-prostor.gov.si/",
-        # additional
+        # # additional
         # 'http://www.gov.si/',
         # 'http://prostor3.gov.si/preg/',
         # 'https://egp.gu.gov.si/egp/',
@@ -414,7 +426,7 @@ if __name__ == "__main__":
         # 'https://gis.gov.si/ezkn/'
     ]
     for site in sites:
-        frontier.put(site)
+        frontier.put((site, False))
         frontier_dict[site] = True
 
     workers = int(sys.argv[1]) if len(sys.argv) >= 2 else DEFAULT_CONCURRENT_WORKERS
