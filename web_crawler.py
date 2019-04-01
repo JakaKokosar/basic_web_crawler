@@ -180,6 +180,7 @@ class Worker:
         try:
             response = self.get_response(url)  # this can raise exception
             status_code = response.status_code
+            time.sleep(0.2)
 
             if self.should_download_and_save_file(url) or \
                 "msword" in response.headers["Content-Type"] or \
@@ -193,7 +194,7 @@ class Worker:
             elif "text/html" in response.headers["Content-Type"]:
                 # open with selenium to render all the javascript
                 try:
-                    self.driver.get(url)
+                    self.driver.get(url, timeout=10)
                     print("Did receive HTML content from: " + str(url))
                     self.parse_page_content(site_id, url, status_code, datetime.datetime.now(), robots)
                 except Exception as e:
@@ -219,8 +220,6 @@ class Worker:
         hashed = hash_document(document)
 
         existing_page_id = self.conn.page_for_url(url)
-        if url == "http://www.gov.si/":
-            print()
 
         try:
           if hashed in documents_dict:
@@ -250,6 +249,12 @@ class Worker:
             print()
 
         soup = BeautifulSoup(document, 'html.parser')
+
+        base_url_for_image = None
+        base_tags_urls = [base_url.get('href') for base_url in soup.findAll('base')]
+        if len(base_tags_urls) > 0:
+            base_url_for_image = base_tags_urls[0]
+
         hrefs = [
             str(self.to_canonical_form(a.get("href")))
             for a in soup.find_all(href=True)
@@ -296,12 +301,19 @@ class Worker:
                 if self.is_already_visited(img):
                     continue
                 self.add_to_frontier(img, site_id, True)
-            elif self.is_valid_url(url + img):
-                image_sources.append(img)
-                added += 1
-                if self.is_already_visited(img):
-                    continue
-                self.add_to_frontier(img, site_id, True)
+            else:
+                # handling of relative image paths IS BROKEN!!!!!!
+
+                # relative_img_path = url.rsplit('/', 1)[0]
+                if not base_url_for_image is None:
+                    img = self.to_canonical_form(os.path.join(base_url_for_image, img))
+
+                if self.is_valid_url(img) and 'base64' not in img:
+                    image_sources.append(img)
+                    added += 1
+                    if self.is_already_visited(img):
+                        continue
+                    self.add_to_frontier(img, site_id, True)
 
         print("Added " + str(added) + " new images to list")
 
