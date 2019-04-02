@@ -1,0 +1,15 @@
+beautifulsoup4==4.7.1
+bs4==0.0.1
+certifi==2019.3.9
+chardet==3.0.4
+decorator==4.4.0
+idna==2.8
+psycopg2==2.7.7
+requests==2.21.0
+selenium==3.141.0
+six==1.12.0
+soupsieve==1.9
+untangle==1.1.1
+urlcanon==0.3.0
+urllib3==1.24.1
+validators==0.12.4
