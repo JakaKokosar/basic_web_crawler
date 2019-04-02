@@ -4,6 +4,8 @@
 \usepackage{apacite}
 \usepackage{float}
 \usepackage{listings}
+\usepackage{float}
+\usepackage[table]{xcolor}
 \begin{document}
 
 \title{Programming Assignment 1}
@@ -93,11 +95,56 @@ Our database scheme remains the same as instructed with a few minor additions an
 
 \end{itemize}
 \section{Crawling statistics}
-network + general stats
-\section{Conclusion}
+The following statistics were collected from the database after the crawling had terminated. For the visualisations we used Orange and used it to generate interesting graphs. We also utilised vis.js which is a visualisation library for javascript and made a simulation in pictures of our BFS search tactic.
+\\
+\\
+{\rowcolors{3}{green!80!yellow!50}{green!70!yellow!40}
+\begin{tabular}{|p{2.5cm}|p{2.5cm}|p{2.5cm}|p{2.5cm}|p{2.5cm}|p{2.5cm}|}
+\hline
+Sites & Pages & Duplicates & Images & Binaries & Unknowns \\
+\hline
+393 & 33432 & 106 & 7687 & 5783 & 720  \\
+\hline
+\end{tabular}
+}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.8\textwidth]{html_duplicate_binary.png}
+  \caption{As can be seen from the figure most of the data is in a binary or html format and there are very few duplicates.}
+\end{figure}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.8\textwidth]{img_stats.png}
+  \caption{The most common image format is jpeg followed by png which is to be expected as they are the most common formats in general.}
+\end{figure}
+\begin{figure}[H]
+\centering
+  \includegraphics[width=0.8\textwidth]{PDF_distribution.png}
+  \caption{Most files on government websites are in pdf since doc is more prone to unwanted changes.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+  \includegraphics[width=0.8\textwidth]{start.png}
+  \caption{A simulated graph of our algorithm showing the first few nodes that were explored colored in blue.}
+\end{figure}
+\begin{figure}[H]
+\centering
+  \includegraphics[width=0.8\textwidth]{step1.png}
+  \caption{A full cluster of our first 250 explored nodes along with some of the links between them. Due to the limitations of the vis.js library it was difficult to produce more than 300 in a meaningful time.}
+\end{figure}
+\begin{figure}[H]
+\centering
+  \includegraphics[width=0.8\textwidth]{step2.png}
+  \caption{The same picture however here we can notice that the starting cluster has been completely explored which is proof of the usage of BFS.}
+\end{figure}
+\begin{figure}[H]
+\centering
+  \includegraphics[width=0.8\textwidth]{step3.png}
+  \caption{On this picture even the clusters that border the first cluster have been explored.}
+\end{figure}
 
  \bibliographystyle{apacite}
- 
  \bibliography{references}
 
 
