@@ -43,9 +43,9 @@ class Worker:
         # chrome_options.accept_untrusted_certs = True
 
         if sys.platform == "win32":
-            driver_path = os.path.join(os.getcwd(), "crawler/chromedriver.exe")
+            driver_path = os.path.join(os.getcwd(), "chromedriver.exe")
         else:
-            driver_path = os.path.join(os.getcwd(), "crawler/chromedriver")
+            driver_path = os.path.join(os.getcwd(), "chromedriver")
 
         self.driver = webdriver.Chrome(driver_path, options=chrome_options)
         self.driver.set_page_load_timeout(10)
