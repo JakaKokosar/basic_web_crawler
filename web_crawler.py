@@ -4,7 +4,7 @@ import sys
 import os
 import time
 import datetime
-from urllib.parse import urlparse
+import sitemap
 
 import requests
 import urllib3
@@ -15,9 +15,8 @@ from selenium import webdriver
 from bs4 import BeautifulSoup
 from selenium.webdriver.chrome.options import Options
 from concurrent.futures import ThreadPoolExecutor, Future, ALL_COMPLETED, wait
-from urllib import robotparser, request, parse
+from urllib import robotparser, parse
 
-import sitemap
 from utils import DBConn, DBApi
 from hashing import *
 
@@ -26,12 +25,9 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 download_dir = "data/"
 supported_files = ["pdf", "doc", "docx", "ppt", "pptx"]
 
-try:
-    os.makedirs(download_dir)
-except OSError as e:
-    pass
 
 connections = None
+
 
 class Worker:
     """ Base class for web crawler.
@@ -44,7 +40,6 @@ class Worker:
         self.current_page = ""
 
     def get_chrome_driver(self):
-        # TODO - Pretend to be a browser
         chrome_options = Options()
         chrome_options.add_argument("--headless")
         chrome_options.add_argument('--ignore-certificate-errors')
@@ -57,17 +52,6 @@ class Worker:
 
         self.driver = webdriver.Chrome(driver_path, options=chrome_options)
         self.driver.set_page_load_timeout(10)
-
-    def get_root_domain(self, url: str):
-        parsed_uri = urlparse(url)
-        domain = '{uri.netloc}/'.format(uri=parsed_uri)
-        return domain
-
-    def to_canonical(self, url: str):
-        return urlcanon.semantic(urlcanon.parse_url(url))
-
-    def is_valid_url(self, url: str):
-        return validators.url(url)
 
     def add_to_frontier(self, url, site_id, is_binary=False):
         page_id = self.conn.insert_page(site_id, "FRONTIER", url, None, None, None, is_binary=is_binary)
@@ -177,7 +161,7 @@ class Worker:
                 try:
                     self.driver.get(url)
                     print("Did receive HTML content from: " + str(url))
-                    self.parse_page_content(site_id, url, status_code, datetime.datetime.now(), robots)
+                    self.parse_page_content(site_id, url, status_code, datetime.datetime.now())
                 except Exception as e:
                     print("An error occured while parsing page content: " + str(e) + " from url " + str(url))
                     page_id = self.conn.page_id_for_page_in_frontier(site_id, url)
@@ -196,7 +180,7 @@ class Worker:
             else:
                 self.conn.insert_page(site_id, "HTML", url, None, 404, datetime.datetime.now())
 
-    def parse_page_content(self, site_id: int, url: str, status_code, accessed_time, robots: robotparser.RobotFileParser):
+    def parse_page_content(self, site_id: int, url: str, status_code, accessed_time):
         document = self.driver.page_source
         hashed = hash_document(document)
 
@@ -254,7 +238,7 @@ class Worker:
         print("Added " + str(added) + " new urls from hrefs")
 
         # # Handling JS onclick
-        # # TODO Needs field testing
+        # # TODO  -- NOT Working :(
         # all_tags = soup.find_all()
         # clickables = [
         #     str(a.get("onclick")).split("=")[-1].replace('"', '').replace("'", "")
@@ -270,7 +254,6 @@ class Worker:
         # print("Added " + str(added) + " new urls from js click")
 
         # Image collection
-        # TODO Needs field testing
         images = [a.get("src") for a in soup.find_all('img')]
         image_sources = []
         added = 0
@@ -282,7 +265,6 @@ class Worker:
                     continue
                 self.add_to_frontier(img, site_id, True)
             else:
-                # relative_img_path = url.rsplit('/', 1)[0]
                 if not base_url_for_image is None:
                     img = self.to_canonical_form(os.path.join(base_url_for_image, img))
 
@@ -350,9 +332,6 @@ class Worker:
     def get_response(url: str):
         """ This is where we fetch url content using request. We need to do that if we want to download files
             and we need this for storing status codes.
-
-            TODO: can someone check if we must store visited links with bad status codes?
-                  if i'm not mistaken that is the case. please investigate.
         """
         response = requests.get(url, timeout=10, allow_redirects=False, verify=False)
         response.raise_for_status()
@@ -374,7 +353,7 @@ class Worker:
 
     @staticmethod
     def should_download_and_save_file(url):
-        for f in supported_files:  # TODO: - refactor this using python magic
+        for f in supported_files:
             if f in url:
                 return True
         return False
@@ -387,18 +366,16 @@ class Worker:
     def to_canonical_form(url: str):
         return str(urlcanon.semantic(urlcanon.parse_url(url)))
 
-    def __call__(self):
-        # connect to PostgreSQL database
-        # self.db_connection = db_connect()
-        # print(self.db_connection)
-        #
-        self.get_chrome_driver()
-        #
-        # # TODO: gracefully close connection,
-        # #       when process is finished.
-        # self.db_connection.close()
-        # print(self.db_connection)
+    @staticmethod
+    def to_canonical(url: str):
+        return urlcanon.semantic(urlcanon.parse_url(url))
 
+    @staticmethod
+    def is_valid_url(url: str):
+        return validators.url(url)
+
+    def __call__(self):
+        self.get_chrome_driver()
         return self.dequeue_url()
 
 
@@ -432,15 +409,6 @@ if __name__ == "__main__":
         for url in sites:
             worker.get_chrome_driver()
             worker.parse_url(url, False)
-
-    # conn: DBApi = connections[0]
-    # pages = conn.select_all_pages()
-    # for page in pages:
-    #     if page[2] == "FRONTIER":
-    #         frontier.put(page[3])
-    #         frontier_dict[page[3]] = True
-    #     else:
-    #         visited_dict[page[3]] = True
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
 
