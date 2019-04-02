@@ -4,7 +4,7 @@ import sys
 import os
 import time
 import datetime
-import sitemap
+
 
 import requests
 import urllib3
@@ -17,15 +17,12 @@ from selenium.webdriver.chrome.options import Options
 from concurrent.futures import ThreadPoolExecutor, Future, ALL_COMPLETED, wait
 from urllib import robotparser, parse
 
-from utils import DBConn, DBApi
-from hashing import *
+from crawler.utils import DBConn, DBApi
+from crawler.sitemap import *
+from crawler.hashing import *
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-download_dir = "data/"
 supported_files = ["pdf", "doc", "docx", "ppt", "pptx"]
-
-
 connections = None
 
 
@@ -46,9 +43,9 @@ class Worker:
         # chrome_options.accept_untrusted_certs = True
 
         if sys.platform == "win32":
-            driver_path = os.path.join(os.getcwd(), "chromedriver.exe")
+            driver_path = os.path.join(os.getcwd(), "crawler/chromedriver.exe")
         else:
-            driver_path = os.path.join(os.getcwd(), "chromedriver")
+            driver_path = os.path.join(os.getcwd(), "crawler/chromedriver")
 
         self.driver = webdriver.Chrome(driver_path, options=chrome_options)
         self.driver.set_page_load_timeout(10)
@@ -101,7 +98,7 @@ class Worker:
 
             for link in links:
                 req = requests.get(link)
-                sitemap_urls = sitemap.parse_xml(req.text)
+                sitemap_urls = parse_xml(req.text)
                 sitemaps_content += req.text + "\n"
                 for url in sitemap_urls:
                     if not self.is_government_url(url) or self.is_already_visited(url):

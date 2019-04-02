@@ -1,8 +1,7 @@
 import psycopg2
 
 """
-mkdir -p $HOME/docker/volumes/postgres
-docker run --rm --name pg-docker -e POSTGRES_PASSWORD=docker -d -p 5432:5432 -v $HOME/docker/volumes/postgres:/var/lib/postgresql/data postgres
+docker run --rm --name pg-docker -e POSTGRES_PASSWORD=docker -d -p 5432:5432 postgres
 docker exec -it pg-docker psql -U postgres
 """
 
@@ -141,13 +140,7 @@ class DBApi:
         sql = "SELECT * FROM crawldb.page WHERE url = %s"
         return self._execute_one(sql, (url,))
 
-    # # find source `page` from given destination `page`
-    # def source_page_for_destination_page(self, destination_page_id):
-    #     sql = "SELECT * FROM crawldb.link WHERE to_page = %s"
-    #     return self._execute(sql, (3destination_page_id, ))
-
     # internal
-
     def _execute_one(self, sql, data):
         cursor = self.conn.cursor
         cursor.execute(sql, data)
@@ -162,24 +155,22 @@ class DBApi:
         result = cursor.fetchall()
         return result
 
-# execute this to initialize DB for the first time
-# def db_init():
-#     with psycopg2.connect(**db_auth) as conn:
-#         with conn.cursor() as cursor:
-#             with open('crawldb.sql', 'r') as fp:
-#                 create_table_query = fp.read()
-#                 cursor.execute(create_table_query)
-#                 print("Table created successfully in PostgreSQL ")
-#
-#     print("PostgreSQL connection is closed")
-
-
-# def db_connect():
-#     return psycopg2.connect(**db_auth)
-
 
 if __name__ == "__main__":
-    # create_tables()
+    # execute this to initialize DB for the first time
+    # def db_init():
+    #     with psycopg2.connect(**db_auth) as conn:
+    #         with conn.cursor() as cursor:
+    #             with open('crawldb.sql', 'r') as fp:
+    #                 create_table_query = fp.read()
+    #                 cursor.execute(create_table_query)
+    #                 print("Table created successfully in PostgreSQL ")
+    #
+    #     print("PostgreSQL connection is closed")
+
+    # def db_connect():
+    #     return psycopg2.connect(**db_auth)
+
     conn = DBConn()
     api = DBApi(conn)
     id = api.insert_site("http://gov.si", "test", "test2")
