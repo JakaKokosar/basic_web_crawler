@@ -139,9 +139,9 @@ class Worker:
         time.sleep(default_crawl_delay)
 
         # fetch url
-        self.fetch_url(url, site_id, is_binary, robot_parser)
+        self.fetch_url(url, site_id, is_binary)
 
-    def fetch_url(self, url: str, site_id: int, is_binary, robots: robotparser.RobotFileParser):
+    def fetch_url(self, url: str, site_id: int, is_binary):
         try:
             response = self.get_response(url)  # this can raise exception
             status_code = response.status_code
