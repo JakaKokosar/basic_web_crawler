@@ -12,4 +12,4 @@ soupsieve==1.9
 untangle==1.1.1
 urlcanon==0.3.0
 urllib3==1.24.1
-validators==0.12.4
+validators==0.12.6
